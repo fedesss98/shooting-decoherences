@@ -1,32 +1,50 @@
-
 """
-    kraus_operators(pa::Float, pb::Float, a1, a2, b1, b2)
+    density_matrix(a)
 
-Construct the Kraus Operator for the recovery map
-Λ[ρ] = Tr(ρ) σ,
-were the recovered state σ is defined by
-pa [a1 a2] + pb[b1 b2] * [b1 b2]
+a ∈ [-1, 1]
+|ψ> = a|0⟩ + √(1-a²)|1⟩
 """
-function kraus_operators_recovery1(pa::Float64, pb::Float64, a1::Float64, a2::Float64, b1::Float64, b2::Float64)
-    K1 = sqrt(pa) * [a1 0; a2 0]
-    K2 = sqrt(pb) * [b1 0; b2 0]
-    K3 = sqrt(pa) * [0 a1; 0 a2]
-    K4 = sqrt(pb) * [0 b1; 0 b2]
-
-    return [K1, K2, K3, K4]
+function density_matrix(a)
+    v = [a, sqrt(1 - a^2)]
+    return v * v'
 end
 
-"""
-    isometry(system_state::Vector)
 
-Implement the action of the isomery V, acting on a state of the system
-and extending the action of the map in the system+ancilla Hilbert Space.
 """
-function isometry(system_state::Vector, ancilla_basis, kraus_operators)
-    expanded_dims = size(system_state)[1] * size(ancilla_basis[1])[1]
-    result = Vector{ComplexF64}(undef, expanded_dims)
-    for (k, a) in zip(kraus_operators, ancilla_basis)
-        result += kron(k * system_state, a)
-    end
-    return result
+    get_kraus_operators(gamma, t)
+"""
+function get_kraus_operators(gamma, t)
+    e = exp(-gamma*t)
+    k1 = [
+        1 0;
+        0 sqrt(e)
+    ]
+    k2 = [
+        0 sqrt(1-e)
+        0 0
+    ]
+    return [k1, k2]
+end
+
+
+"""
+    amplitude_damping_channel(gamma, t, ρ)
+"""
+function amplitude_damping_channel(kraus, ρ)
+    return sum([k*ρ*k' for k in kraus])
+end
+
+
+"""
+    recovery_map(gamma, t, σ, ρ)
+"""
+function recovery_map(kraus, σ, ρ)
+    # Define the evolution map and its adjoint
+    map(ρ) = sum([k*ρ*k' for k in kraus])
+    map_adj(ρ) = sum([k'*ρ*k for k in kraus])
+
+    inner = matrix_power_pseudo(map(σ), -0.5) * ρ * matrix_power_pseudo(map(σ), -0.5)
+    recovered = matrix_power_pseudo(σ, 0.5) * map_adj(inner) * matrix_power_pseudo(σ, 0.5)
+
+    return recovered
 end

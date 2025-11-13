@@ -1,18 +1,3 @@
-"""
-    construct_unitary(B_out::Matrix, B_in::Matrix)
-
-Construct a unitary matrix from input and output bases.
-
-# Arguments
-- `B_out`: Output orthonormal basis (columns)
-- `B_in`: Input orthonormal basis (columns)
-
-# Returns
-- Unitary matrix U such that U * B_in[:, i] = B_out[:, i]
-"""
-function construct_unitary(B_out::Matrix{ComplexF64}, B_in::Matrix{ComplexF64})
-    return B_out * B_in'
-end
 
 """
     verify_unitary(U::Matrix; atol=1e-10)
@@ -23,21 +8,6 @@ function verify_unitary(U::Matrix{ComplexF64}; atol=1e-10)
     n = size(U, 1)
     return isapprox(U' * U, I(n), atol=atol)
 end
-
-"""
-    print_state(state::Vector, label::String="State")
-
-Pretty print a quantum state vector.
-"""
-function print_state(state::Vector{ComplexF64}, label::String="State")
-    println("$label:")
-    for (i, amp) in enumerate(state)
-        if abs(amp) > 1e-10
-            println("  |$(i-1)⟩: $(round(amp, digits=4))")
-        end
-    end
-end
-
 
 """
     chop_parts(z::ComplexF64)
@@ -102,4 +72,28 @@ function partial_trace_ancilla(rho::Matrix{ComplexF64}, dim_system::Int, dim_anc
     
     return rho_reduced
 end
+
+"""
+    matrix_power_pseudo(ρ, p; tol)
+Compute ρ^p using pseudoinverse for singular matrices.
+Zero eigenvalues (< tol) are kept as zero instead of inverted.
+"""
+function matrix_power_pseudo(ρ, p; tol=1e-10)
+    eigen_decomp = eigen(Hermitian(ρ))
+    λ = eigen_decomp.values
+    V = eigen_decomp.vectors
+    
+    # Apply power only to non-zero eigenvalues
+    λ_powered = similar(λ, ComplexF64)
+    for i in eachindex(λ)
+        if abs(λ[i]) > tol
+            λ_powered[i] = λ[i]^p
+        else
+            λ_powered[i] = 0.0
+        end
+    end
+    
+    return V * Diagonal(λ_powered) * V'
+end
+
 
