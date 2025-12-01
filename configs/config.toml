@@ -1,0 +1,24 @@
+# BB84 Experiment Configuration
+
+experiment = "test01"
+
+[general]
+n_qubits = 20
+shots = 1000
+# Options: "automatic", "statevector", "density_matrix", "matrix_product_state"
+sim_method = "automatic"
+seed = 42  # For stochastic measurements
+eave_check = 5
+
+[alice]
+# Use efficient encoding?
+basis_strategy = "random" 
+
+[bob]
+# 0 = passive, 1 = active
+detection_mode = 0
+
+[noise]
+enabled = true
+# Probability that a qubit gets corrupted
+depolarizing_prob = 0.25
