@@ -1,4 +1,4 @@
-module PetzCollisions
+module PetzMaps
 
 using LinearAlgebra
 

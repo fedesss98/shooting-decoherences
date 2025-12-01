@@ -9,13 +9,13 @@ Study the Petz Recovery Map (PRM) Λ on the Amplitude Damping Channel (ADC).
 - iterate for different initial state σ and different probe state ρ.
 """
 
-using PetzCollisions
+using DecoKiller.PetzMaps
 using LinearAlgebra
 using Plots
 using ProgressBars
 
 gamma = 1.0
-times = range(π/15, 5*π, 10)  # The number of items should be even
+times = range(0.001, 10, 101)  # The number of items should be even
 n_states = 101 # How many states generated
 
 
@@ -61,8 +61,8 @@ function main()
              ylabel="Fidelity", title="PRM created with a=$a")
     println("=== END ===")
     display(g)
-    savefig(g, "visualization/recovery_from_sigma_a1_$a.pdf")
-    savefig(g, "visualization/recovery_from_sigma_a1_$a.png")
+    savefig(g, "../visualization/recovery_from_sigma_a1_$a.pdf")
+    savefig(g, "../visualization/recovery_from_sigma_a1_$a.png")
 
     
     return temporal_evolutions
@@ -88,8 +88,8 @@ function plot_heatmap(f1s, f2s; title="", save=false)
             fill=true)    
 
     if save
-        savefig(g, "visualization/recovery_contour.pdf")
-        savefig(g, "visualization/recovery_contour.png")
+        savefig(g, "../visualization/recovery_contour.pdf")
+        savefig(g, "../visualization/recovery_contour.png")
 
         display(g)
     end
@@ -108,7 +108,7 @@ function heatmap_subplots(temporal_evolutions)
     n = length(plots_array)
     rows = ceil(Int, n / 2)
     g = plot(plots_array..., layout=(rows, 2), size=(1600, 1200), link=:both)
-    savefig(g, "visualization/recovery_contour_grid.pdf")
-    savefig(g, "visualization/recovery_contour_grid.png")
+    savefig(g, "../visualization/recovery_contour_grid.pdf")
+    savefig(g, "../visualization/recovery_contour_grid.png")
     display(g)
 end

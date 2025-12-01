@@ -2,7 +2,7 @@
 Create the collisional Unitary Evolution that gives back a recovery map on the system.
 """
 
-using UnitaryDilation
+using DecoKiller.UnitaryDilation
 using LinearAlgebra
 
 # System Variables
