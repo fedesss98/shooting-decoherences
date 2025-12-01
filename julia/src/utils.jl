@@ -1,3 +1,4 @@
+using TOML
 
 """
     verify_unitary(U::Matrix; atol=1e-10)
@@ -96,4 +97,14 @@ function matrix_power_pseudo(ρ, p; tol=1e-10)
     return V * Diagonal(λ_powered) * V'
 end
 
+function read_config(config_path)
+    if !isfile(config_path)
+        error("Config file not found at: $config_path")
+    end
+
+    config = TOML.parsefile(config_path)
+    println("""Loaded configuration for experiment $(config["experiment"])""")
+
+    return config
+end
 
