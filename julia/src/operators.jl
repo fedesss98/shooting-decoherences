@@ -48,3 +48,54 @@ function recovery_map(kraus, σ, ρ)
 
     return recovered
 end
+
+
+"""
+    get_kraus_from_map(E, d; tol=1e-10)
+
+Given a quantum channel `E` specified as a function on density matrices
+(`ρ::AbstractMatrix{<:Complex}`), return a vector of Kraus operators `K_k`
+as `Matrix{ComplexF64}`, such that
+
+    E(ρ) ≈ sum(K -> K * ρ * K', Ks)
+
+for all ρ in the d-dimensional system.
+"""
+function get_kraus_from_map(E::Function, d::Int; tol=1e-10)
+    # Build Choi matrix J of size d^2 × d^2
+    J = zeros(ComplexF64, d^2, d^2)
+
+    # Basis operators |m><n|
+    for m in 1:d, n in 1:d
+        ρ_mn = zeros(ComplexF64, d, d)
+        ρ_mn[m, n] = 1.0
+        F_mn = E(ρ_mn)  # d×d matrix
+
+        # Fill the corresponding block in J
+        # row index: (m-1)*d + p
+        # col index: (n-1)*d + q
+        @inbounds for p in 1:d, q in 1:d
+            row = (m-1)*d + p
+            col = (n-1)*d + q
+            J[row, col] = F_mn[p, q]
+        end
+    end
+
+    # Symmetrize to remove small numerical non-Hermiticity
+    J = (J + J') / 2
+
+    # Eigen-decomposition: J = V * Diagonal(λ) * V'
+    evals, evecs = eigen(Hermitian(J))
+
+    kraus = Matrix{ComplexF64}[]
+    for k in 1:length(evals)
+        λ = evals[k]
+        if λ > tol
+            v = evecs[:, k]              # length d^2
+            K = reshape(v, d, d)         # d × d matrix
+            push!(kraus, sqrt(λ) * K)
+        end
+    end
+
+    return kraus
+end
