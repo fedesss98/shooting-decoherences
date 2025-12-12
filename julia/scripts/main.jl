@@ -16,56 +16,102 @@ using ProgressBars
 
 gamma = 1.0
 times = range(0.001, 10, 101)  # The number of items should be even
-n_states = 101 # How many states generated
+n_states = 16 # How many states generated
+n_qubits = 3 # Qubits to create a logic qubit
 
 
-function main()
+function fullrank_state(n_qubits)
+    coeffs = normalize(randn(Float64, 2^n_qubits))
+    r = zeros(ComplexF64, 2^n_qubits, 2^n_qubits)
+    for (i, c) in enumerate(coeffs)
+        psi = zeros(ComplexF64, 2^n_qubits)
+        psi[i] = c
+        r += psi * psi'
+    end
+    return r
+end
+
+
+function get_kraus_operators(process, gamma, t)
+    if process == "dephasing"
+        kraus = get_dephasing_operators(gamma, t)
+    elseif process == "damping"
+        kraus = get_amplitudedamping_operators(gamma, t)
+    end
+    return kraus 
+end
+
+
+function main(process="dephasing")
+    if !in(process, ["dephasing", "damping"])
+        error("Process not known, try with `dephasing` or `decoherence`!")
+    end
+
     println("==== STARTING ====")
 
-    temporal_evolutions = Dict()
+    f1s = Dict()
+    f2s = Dict()
+    σ = fullrank_state(n_qubits)
+    for i in ProgressBar(1:n_states)
+        a, b, c, d = normalize(randn(Float64, 4))
+        if i==1
+            # Start with the reference state itself
+            a = 1.0
+            b = 0.0
+            c = 0.0
+            d = 0.0
+        end
+        ρ0 = codespace_state(n_qubits, a, b, c, d)
+        ρ1 = deepcopy(ρ0)
+        ρ2 = deepcopy(ρ0)
 
-    for tau in times
-        kraus = get_kraus_operators(gamma, tau)
 
-        f1s = Dict()
-        f2s = Dict()
-        for a in ProgressBar(range(-1, 1, n_states))
-            σ = density_matrix(a)
-            f1s_sigma = []
-            f2s_sigma = []
-            for b in ProgressBar(range(-1, 1, n_states); leave=false)
-                ρ = density_matrix(b)
-                
-                ρt = amplitude_damping_channel(kraus, ρ)
-                ρr = recovery_map(kraus, σ, ρt)
+        f1s_sigma = []
+        f2s_sigma = []
+        for t in times
 
-                f1 = fidelity(ρ, ρt)
-                f2 = fidelity(ρ, ρr)
+            # Compute fidelity
+            f1 = fidelity(ρ0, ρ1)
+            f2 = fidelity(ρ0, ρ2)
+            # Evolve the state
+            kraus = get_kraus_operators(process, gamma, t)
+            ρ1 = apply_channel(kraus, ρ1, n_qubits)
+            # Recover
+            ρ2 = deepcopy(ρ1)
+            ρ2 = recovery_map(kraus, σ, ρ2, n_qubits)
 
-                append!(f1s_sigma, f1)
-                append!(f2s_sigma, f2)
-            end
-            f1s[a] = f1s_sigma
-            f2s[a] = f2s_sigma
+            append!(f1s_sigma, f1)
+            append!(f2s_sigma, f2)
         end
 
-        temporal_evolutions[tau] = [f1s, f2s]
+        f1s[(a,b)] = f1s_sigma
+        f2s[(a,b)] = f2s_sigma
     end
-    
-    tau_to_plot = times[2]
-    f1s, f2s = temporal_evolutions[tau_to_plot]
-    x = range(-1, 1, n_states)
-    a = 0.0 
-    g = plot(x, [f1s[a], f2s[a]], label=["F1(ρ(0), ρ(τ))" "F2(ρ(0), Λ[ρ(τ)])"],
-             xlabel="State parameterization (a|0> + √(1-a²)|1>",
-             ylabel="Fidelity", title="PRM created with a=$a")
+
+    # Extract metadata to ensure consistent ordering
+    titles = Dict((a,b) => "$(round(a, digits=3)) / $(round(b, digits=3))" for (a, b) in keys(f1s))
+
+    plot_array = [
+        plot(times, [f1s[k], f2s[k]],
+             title = titles[k],
+             label = ["Free" "Recovered"],
+             legend = :topright)
+        for k in keys(f1s)
+    ]
+
+    p = plot(plot_array...,
+             layout=(4, 4),
+             size=(1200, 800),
+             plot_title = "Recovery vs Dephasing with fullrank state")
+
+    display(p)
+
     println("=== END ===")
-    display(g)
-    savefig(g, "../visualization/recovery_from_sigma_a1_$a.pdf")
-    savefig(g, "../visualization/recovery_from_sigma_a1_$a.png")
+    savefig(p, "../visualization/$(n_qubits)qubits_recovery_in_time.pdf")
+    savefig(p, "../visualization/$(n_qubits)qubits_recovery_in_time.png")
 
     
-    return temporal_evolutions
+    return f1s, f2s
 end
 
 

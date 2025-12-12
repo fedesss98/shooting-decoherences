@@ -1,3 +1,7 @@
+const I2 = [1.0+0.0im 0.0; 0.0 1.0]
+const Z  = [1.0+0.0im 0.0; 0.0 -1.0]
+
+
 """
     density_matrix(a)
 
@@ -9,11 +13,29 @@ function density_matrix(a)
     return v * v'
 end
 
+"""
+    codespace_state(n_qubits, a, b)
+
+Create a logic qubit a|00...0> + b|11...1>,
+where we adopt the convention that |00...0> is at index 1
+of the 2^n_qubits state vector and |11...1> is at index n_qubits
+"""
+function codespace_state(n_qubits, a, b, c, d)
+    psi = zeros(ComplexF64, 2^n_qubits)
+    psi[1] = a
+    psi[2] = c
+    psi[4] = d
+    psi[end] = b
+    psi = normalize(psi)
+    return psi * psi'
+end
+
+
 
 """
-    get_kraus_operators(gamma, t)
+    get_amplitudedamping_operators(gamma, t)
 """
-function get_kraus_operators(gamma, t)
+function get_amplitudedamping_operators(gamma, t)
     e = exp(-gamma*t)
     k1 = [
         1 0;
@@ -26,14 +48,48 @@ function get_kraus_operators(gamma, t)
     return [k1, k2]
 end
 
+"""
+    get_dephasing_operators(gamma, t)
+"""
+function get_dephasing_operators(gamma, t)
+    e = exp(-gamma*t)
+    p = (1.0 - e) / 2.0
+
+    k1 = sqrt(1.0 - p) * I2
+    k2 = sqrt(p) * Z
+    
+    return [k1, k2]
+end
 
 """
-    amplitude_damping_channel(gamma, t, ρ)
+    apply_channel(kraus, ρ)
 """
-function amplitude_damping_channel(kraus, ρ)
+function apply_channel(kraus, ρ)
     return sum([k*ρ*k' for k in kraus])
 end
 
+"""
+    apply_channel(kraus, ρ, n_qubits)
+Applies the amplitude damping channel for all n qubits in the system sequentially
+"""
+function apply_channel(kraus, ρ, n_qubits::Int)
+    ρi = copy(ρ)
+
+    for qubit in n_qubits
+        ρf = zeros(ComplexF64, size(ρ))
+        for k in kraus
+            # Extend the Kraus operator
+            op_list = [i == qubit ? k : I2 for i in 1:n_qubits]
+            k_full = foldl(kron, op_list)
+
+            ρf += k_full * ρi * k_full'
+        end
+        # Update state
+        ρi = ρf
+    end
+
+    return ρi
+end
 
 """
     recovery_map(gamma, t, σ, ρ)
@@ -42,6 +98,22 @@ function recovery_map(kraus, σ, ρ)
     # Define the evolution map and its adjoint
     map(ρ) = sum([k*ρ*k' for k in kraus])
     map_adj(ρ) = sum([k'*ρ*k for k in kraus])
+
+    inner = matrix_power_pseudo(map(σ), -0.5) * ρ * matrix_power_pseudo(map(σ), -0.5)
+    recovered = matrix_power_pseudo(σ, 0.5) * map_adj(inner) * matrix_power_pseudo(σ, 0.5)
+
+    return recovered
+end
+
+"""
+    recovery_map(kraus, σ, ρ, n_qubits)
+Applies the recovery map for all n qubits in the system sequentially
+"""
+function recovery_map(kraus, σ, ρ, n_qubits)
+    # Define the evolution map and its adjoint
+    kraus_dagger = [k' for k in kraus]
+    map(ρ) = apply_channel(kraus, ρ, n_qubits)
+    map_adj(ρ) = apply_channel(kraus_dagger, ρ, n_qubits)
 
     inner = matrix_power_pseudo(map(σ), -0.5) * ρ * matrix_power_pseudo(map(σ), -0.5)
     recovered = matrix_power_pseudo(σ, 0.5) * map_adj(inner) * matrix_power_pseudo(σ, 0.5)
