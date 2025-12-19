@@ -17,3 +17,13 @@ function fidelity(ρ, σ; tol=1e-10)
     
     return real(F)  # Should be real, but numerical errors might give tiny imaginary part
 end
+
+
+function overlap(ρ, σ::Matrix)
+    return real(tr(ρ, σ))
+end
+
+
+function overlap(ρ, ψ::Vector)
+    return real(ψ' * ρ * ψ)
+end

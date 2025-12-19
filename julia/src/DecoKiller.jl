@@ -4,7 +4,7 @@ include("PetzMaps.jl")
 include("UnitaryDilation.jl")
 include("BB84Circuit.jl")
 
-export fidelity, encode_bit, decode_bit
+export fidelity, overlap, encode_bit, decode_bit
 
 using .PetzMaps
 using .UnitaryDilation

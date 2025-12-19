@@ -1,5 +1,6 @@
 const I2 = [1.0+0.0im 0.0; 0.0 1.0]
 const Z  = [1.0+0.0im 0.0; 0.0 -1.0]
+const X  = [0.0im 1.0; 1.0 0.0]
 
 
 """
@@ -56,7 +57,20 @@ function get_dephasing_operators(gamma, t)
     p = (1.0 - e) / 2.0
 
     k1 = sqrt(1.0 - p) * I2
-    k2 = sqrt(p) * Z
+    k2 = sqrt(p) * X
+    
+    return [k1, k2]
+end
+
+"""
+    get_bitflip_operators(gamma, t)
+"""
+function get_bitflip_operators(gamma, t)
+    e = exp(-2*gamma*t)
+    p = (1.0 - e) / 2.0
+
+    k1 = sqrt(1.0 - p) * I2
+    k2 = sqrt(p) * X
     
     return [k1, k2]
 end
@@ -91,18 +105,35 @@ function apply_channel(kraus, ρ, n_qubits::Int)
     return ρi
 end
 
+
+"""
+    partial_recovery_function(kraus, σ, n_qubits)
+"""
+function partial_recovery_function(kraus, σ, n_qubits)
+    # Define the evolution map and its adjoint
+    map(x) = apply_channel(kraus, x, n_qubits)
+
+    sqrt_map = matrix_power_pseudo(map(σ), -0.5)
+    sqrt_state = matrix_power_pseudo(σ, 0.5)
+    kraus_dagger = [k' for k in kraus]
+    return ρ -> begin
+        map_adj(x) = apply_channel(kraus_dagger, x, n_qubits)
+        inner = sqrt_map * ρ * sqrt_map
+        recovered = sqrt_state * map_adj(inner) * sqrt_state
+        return recovered
+    end
+end
+
 """
     recovery_map(gamma, t, σ, ρ)
+Returns the recovery map as a function of the new state to be recovered only
 """
 function recovery_map(kraus, σ, ρ)
-    # Define the evolution map and its adjoint
-    map(ρ) = sum([k*ρ*k' for k in kraus])
-    map_adj(ρ) = sum([k'*ρ*k for k in kraus])
+    map(x) = sum([k*x*k' for k in kraus])
+    map_adj(x) = sum([k'*x*k for k in kraus])
 
     inner = matrix_power_pseudo(map(σ), -0.5) * ρ * matrix_power_pseudo(map(σ), -0.5)
     recovered = matrix_power_pseudo(σ, 0.5) * map_adj(inner) * matrix_power_pseudo(σ, 0.5)
-
-    return recovered
 end
 
 """
