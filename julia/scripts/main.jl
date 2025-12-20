@@ -9,12 +9,13 @@ Study the Petz Recovery Map (PRM) Λ on the Amplitude Damping Channel (ADC).
 - iterate for different initial state σ and different probe state ρ.
 """
 
-using DecoKiller.PetzMaps
+using DecoKiller.PetzMaps # Custom function
 using LinearAlgebra
-using Plots
-using ProgressBars
-using LaTeXStrings
-using Random
+using Plots       
+using ProgressBars        # Show loop progresses
+using LaTeXStrings        # Pretty print Plots labels
+using Random              # Generate random states
+using JSON                # Save outputs
 
 
 const GAMMA    = 1.0
@@ -139,7 +140,6 @@ function run_experiment(
             kraus = get_kraus_operators(noise_model, gamma, t)
             ρ1 = apply_channel(kraus, ρ1, n_qubits)
             ρ2 = apply_channel(kraus, ρ2, n_qubits)
-            #=ρ2 = deepcopy(ρ1)=#
             # Recover only the second state
             ρ2 = recovery_map(kraus, γ, ρ2, n_qubits)
 
@@ -161,10 +161,8 @@ function run_experiment(
     avg_f = sum(avg_f_values) / (length(avg_f_values))
     std_f = sum((x - avg_f)^2 for x in avg_f_values) / (length(avg_f_values) - 1)
     println("Average Fidelity: $avg_f +- $std_f")
-    println("Average Fidelity k=0.5: $(avg_fs[0.5])\n")
 
     # Extract metadata to ensure consistent ordering
-    #=titles = Dict((a,b) => "α ≈ $(round(a, digits=3))" for (a, b) in keys(f1s))=#
     titles = ["Fidelity Evolution ψ$i" for i in 1:n_states]
     
     n_plot_rows = 4
@@ -182,9 +180,7 @@ function run_experiment(
     p = plot(plot_array...,
              layout=(n_plot_rows, n_plot_cols),
              size=(1200, 800),
-             plot_title = "Recovery vs $(noise_model) with fullrank state")
-
-    #=display(p)=#
+             plot_title = "Recovery vs $(noise_model) noise (N=$n_qubits), β=$beta")
 
     println("\n=== END ===\n")
     #=savefig(p, "../visualization/$(noise_model)/$(n_qubits)qubits_recovery_in_time_beta$beta.pdf")=#
@@ -228,63 +224,6 @@ function plot_fig3(recovery_fidelities, k; logy=false)
     return p
 end
 
-
-function plot_heatmap(f1s, f2s; title="", save=false)
-    a1_vals = range(-1, 1, n_states)
-    a2_vals = range(-1, 1, n_states)
-    # Convert dict to matrix
-    f1_matrix = hcat([f1s[a1] for a1 in a1_vals]...)'
-    f2_matrix = hcat([f2s[a1] for a1 in a1_vals]...)'
-    metric = f1_matrix - f2_matrix
-    # Heatmap
-    #=heatmap(a1_vals, a2_vals, metric, =#
-    #=        xlabel="a1", ylabel="a2", =#
-    #=        title="f(a1, a2)")=#
-
-    # Or contour plot
-    g = contour(a1_vals, a2_vals, metric,
-            xlabel="a₁", ylabel="a₂",
-            title=title,
-            fill=true)    
-
-    if save
-        savefig(g, "../visualization/recovery_contour.pdf")
-        savefig(g, "../visualization/recovery_contour.png")
-
-        display(g)
-    end
-    return g
-end
-
-
-function heatmap_subplots(temporal_evolutions)
-    plots_array = []
-
-    for (t, (f1s, f2s)) in temporal_evolutions
-        p = plot_heatmap(f1s, f2s; title="τ = $t")
-        push!(plots_array, p)
-    end
-
-    n = length(plots_array)
-    rows = ceil(Int, n / 2)
-    g = plot(plots_array..., layout=(rows, 2), size=(1600, 1200), link=:both)
-    savefig(g, "../visualization/recovery_contour_grid.pdf")
-    savefig(g, "../visualization/recovery_contour_grid.png")
-    display(g)
-end
-
-function iterate_over_betas(betas; noise_model="bitflip", n_qubits, kwargs...)
-    f1b = []
-    
-    i = 0
-    for b in betas
-        i += 1
-        println("Experiment $i")
-        f1s, f2s, states, avg = run_experiment(noise_model; beta=b, n_qubits=n_qubits, kwargs...)
-        push!(f1b, (n_qubits, b, avg))
-    end
-    return f1b
-end
 
 function iterate_exps(betas, n_qubits; noise_model="bitflip", save=true, kwargs...)
     f1b = []
