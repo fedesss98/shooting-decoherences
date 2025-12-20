@@ -285,3 +285,25 @@ function iterate_over_betas(betas; noise_model="bitflip", n_qubits, kwargs...)
     end
     return f1b
 end
+
+function iterate_exps(betas, n_qubits; noise_model="bitflip", save=true, kwargs...)
+    f1b = []
+    
+    i = 0
+    for n in n_qubits
+    for b in betas
+        i += 1
+        println("Experiment $i")
+        f1s, f2s, states, avg = run_experiment(noise_model; beta=b, n_qubits=n, kwargs...)
+        push!(f1b, (n, b, avg))
+    end
+    end
+
+    if save
+        open("../experiments/nbeta_iterations/average_recovery_fidelities.json", "w") do f
+            JSON.print(f, f1b)
+        end
+    end
+
+    return f1b
+end
