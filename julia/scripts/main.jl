@@ -195,7 +195,7 @@ function run_experiment(
 end
 
 
-function plot_fig3(recovery_fidelities, k)
+function plot_fig3(recovery_fidelities, k; logy=false)
     if !(k in keys(recovery_fidelities[1][3]))
         k = collect(keys(recovery_fidelities[1][3]))[k]
     end
@@ -208,8 +208,16 @@ function plot_fig3(recovery_fidelities, k)
     p = scatter(xs, ys, 
                 plot_title = "Average Infidelity vs β",
                 xlabel = L"$\beta$", ylabel=L"$1-\mathcal{F}_k$",
-                ylims=(0.0, 1.0), yscale=:log10,
+                ylims=(0.0, 1.0),
                 size=(600, 400))
+    if logy
+        # Define log scale values
+        tick_values = 10.0 .^ (-10:1:0)
+
+        # Define corresponding labels using LaTeX syntax
+        tick_labels = ["10^{$i}" for i in -10:1:0]
+        plot!(yscale=:log10, yticks=(tick_values, tick_labels))
+    end
 
     display(p)
     #=savefig(p, "../visualization/nb_vs_k$k.pdf")=#
@@ -268,9 +276,11 @@ end
 function iterate_over_betas(betas; noise_model="bitflip", n_qubits, kwargs...)
     f1b = []
     
-    println(kwargs)
+    i = 0
     for b in betas
-        f1s, f2s, avg = run_experiment(noise_model; beta=b, n_qubits=n_qubits, kwargs...)
+        i += 1
+        println("Experiment $i")
+        f1s, f2s, states, avg = run_experiment(noise_model; beta=b, n_qubits=n_qubits, kwargs...)
         push!(f1b, (n_qubits, b, avg))
     end
     return f1b
