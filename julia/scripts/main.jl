@@ -190,8 +190,79 @@ function run_experiment(
     return f1s, f2s, states, avg_fs
 end
 
+function run_fig3_experiment(
+    plot_points,
+    n_qubits,
+    noise_model ="bitflip";
+    n_states    = N_STATES,
+    gamma       = GAMMA,
+    time        = 1.0,
+    plot        = false,
+    kwargs...
+)
 
-function plot_fig3(recovery_fidelities, k; logy=false)
+    if !in(noise_model, ["dephasing", "damping", "bitflip"])
+        error("Process not known, try with `dephasing` or `decoherence`!")
+    end
+
+    println("==== STARTING experiment with parameters ====")
+    for (key, val) in sort(collect(Base.@locals), by=x->x[1])
+        # rpad aligns the keys to 15 characters for a clean column
+        println("$(rpad(key, 15)) : $val")
+    end
+    println("============================")
+
+    f1s = []
+    f2s = []
+    states = []
+    recovery_fidelities = []
+
+    for (i, n) in enumerate(n_qubits)
+        println("Experiment $i with $n-qubits states.")
+        # Find the right beta such that
+        # every plot point is n*beta
+        betas = plot_points ./ n
+        for beta in betas
+            γ = starting_state(n, beta)
+            ψ0 = zeros(ComplexF64, 2^n)
+        
+            for _ in ProgressBar(1:n_states)
+                ψ0 = random_state(n)
+                ρ0 = ψ0 * ψ0'
+                ρ1 = deepcopy(ρ0)
+                ρ2 = deepcopy(ρ0)
+
+                # Evolve the states
+                kraus = get_kraus_operators(noise_model, gamma, time)
+                ρ1 = apply_channel(kraus, ρ1, n)
+                ρ2 = apply_channel(kraus, ρ2, n)
+                # Recover only the second state
+                ρ2 = recovery_map(kraus, γ, ρ2, n)
+
+                # Compute fidelity
+                f1 = fidelity(ρ0, ρ1)
+                f2 = fidelity(ρ0, ρ2)
+
+                append!(f1s, f1)
+                append!(f2s, f2)
+                push!(states, ψ0)
+            end
+            # Compute the average fidelity for recovery map
+            data = (n, beta, sum(f2s) / length(f2s))
+            push!(recovery_fidelities, data)
+        end
+    end
+
+    println("\n=== END ===\n")
+    
+    if plot
+        plot_fig3(recovery_fidelities, time; kwargs...)
+    end
+
+    return f1s, f2s, states, avg_fs
+end
+
+function plot_fig3(recovery_fidelities, k; logy=false, xlims=(-0.1, 5.0))
     if !(k in keys(recovery_fidelities[1][3]))
         k = collect(keys(recovery_fidelities[1][3]))[k]
     end
@@ -205,15 +276,15 @@ function plot_fig3(recovery_fidelities, k; logy=false)
                 plot_title = "Average Infidelity vs nβ",
                 label = permutedims(["n=$n" for n in ns]),
                 xlabel = L"$n\beta$", ylabel=L"$1-\mathcal{F}_k$",
-                ylims=(0.0, 1.0),
-                size=(600, 400))
+                size=(520, 400))
+    plot!(ylims=(0.0, 1.0), xlims=xlims)
     if logy
         # Define log scale values
         tick_values = 10.0 .^ (-10:1:0)
 
         # Define corresponding labels using LaTeX syntax
         tick_labels = ["10^{$i}" for i in -10:1:0]
-        plot!(yscale=:log10, ylims=(1e-4, 1e0), yticks=(tick_values, tick_labels))
+        plot!(yscale=:log10, ylims=(1e-3, 1e0), yticks=(tick_values, tick_labels))
     end
 
     display(p)
