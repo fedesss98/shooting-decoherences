@@ -202,8 +202,9 @@ function plot_fig3(recovery_fidelities, k; logy=false)
             for qbts in ns]
 
     p = scatter(xs, ys, 
-                plot_title = "Average Infidelity vs β",
-                xlabel = L"$\beta$", ylabel=L"$1-\mathcal{F}_k$",
+                plot_title = "Average Infidelity vs nβ",
+                label = permutedims(["n=$n" for n in ns]),
+                xlabel = L"$n\beta$", ylabel=L"$1-\mathcal{F}_k$",
                 ylims=(0.0, 1.0),
                 size=(600, 400))
     if logy
@@ -212,7 +213,7 @@ function plot_fig3(recovery_fidelities, k; logy=false)
 
         # Define corresponding labels using LaTeX syntax
         tick_labels = ["10^{$i}" for i in -10:1:0]
-        plot!(yscale=:log10, yticks=(tick_values, tick_labels))
+        plot!(yscale=:log10, ylims=(1e-4, 1e0), yticks=(tick_values, tick_labels))
     end
 
     display(p)
