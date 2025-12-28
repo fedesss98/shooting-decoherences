@@ -150,7 +150,7 @@ function run_experiment(
             append!(f1s_sigma, f1)
             append!(f2s_sigma, f2)
             if i!=1
-                avg_fs[t] += overlap(ρ2, ψ0) / n_states
+                avg_fs[t] += overlap(ρ2, ψ0) / (n_states-1)
             end
         end
         push!(f1s, f1s_sigma)
