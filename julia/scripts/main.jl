@@ -212,11 +212,9 @@ function run_fig3_experiment(
     end
     println("============================")
 
-    f1s = []
-    f2s = []
     states = []
     recovery_fidelities = []
-
+    
     for (i, n) in enumerate(n_qubits)
         println("Experiment $i with $n-qubits states.")
         # Find the right beta such that
@@ -225,7 +223,10 @@ function run_fig3_experiment(
         for beta in betas
             γ = starting_state(n, beta)
             ψ0 = zeros(ComplexF64, 2^n)
-        
+            
+            f1s = []
+            f2s = []
+
             for _ in ProgressBar(1:n_states)
                 ψ0 = random_state(n)
                 ρ0 = ψ0 * ψ0'
@@ -259,18 +260,25 @@ function run_fig3_experiment(
         plot_fig3(recovery_fidelities, time; kwargs...)
     end
 
-    return f1s, f2s, states, avg_fs
+    return states, recovery_fidelities
 end
 
-function plot_fig3(recovery_fidelities, k; logy=false, xlims=(-0.1, 5.0))
-    if !(k in keys(recovery_fidelities[1][3]))
-        k = collect(keys(recovery_fidelities[1][3]))[k]
+function plot_fig3(recovery_fidelities, k; logy=false, xlims=(-0.1, 5.0), ylims=(1e-3, 1e0))
+    if recovery_fidelities[1][3] isa Dict
+        if !(k in keys(recovery_fidelities[1][3]))
+            k = collect(keys(recovery_fidelities[1][3]))[k]
+        end
     end
     ns = unique(n for (n, _, _) in recovery_fidelities)
     xs = [[n*beta for (n, beta, _) in recovery_fidelities if n == qbts]
            for qbts in ns]
-    ys = [[1 - f[k] for (n, _, f) in recovery_fidelities if n==qbts]
-            for qbts in ns]
+    if recovery_fidelities[1][3] isa Dict
+        ys = [[1 - f[k] for (n, _, f) in recovery_fidelities if n==qbts]
+                for qbts in ns]
+    else
+        ys = [[1 - f for (n, _, f) in recovery_fidelities if n==qbts]
+                for qbts in ns]
+    end
 
     p = scatter(xs, ys, 
                 plot_title = "Average Infidelity vs nβ",
@@ -284,7 +292,7 @@ function plot_fig3(recovery_fidelities, k; logy=false, xlims=(-0.1, 5.0))
 
         # Define corresponding labels using LaTeX syntax
         tick_labels = ["10^{$i}" for i in -10:1:0]
-        plot!(yscale=:log10, ylims=(1e-3, 1e0), yticks=(tick_values, tick_labels))
+        plot!(yscale=:log10, ylims=ylims, yticks=(tick_values, tick_labels))
     end
 
     display(p)

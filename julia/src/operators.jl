@@ -89,7 +89,7 @@ Applies the amplitude damping channel for all n qubits in the system sequentiall
 function apply_channel(kraus, ρ, n_qubits::Int)
     ρi = copy(ρ)
 
-    for qubit in n_qubits
+    for qubit in 1:n_qubits
         ρf = zeros(ComplexF64, size(ρ))
         for k in kraus
             # Extend the Kraus operator
