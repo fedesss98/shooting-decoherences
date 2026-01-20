@@ -1,92 +1,100 @@
 # Killing Decoherences with Collisions
-## Amplitude Damping Channel
 
-### Prove that it forms a Semigroup
+This project performs physics simulations to study the **Petz Recovery Map (PRM)** $\Lambda$ on quantum noise channels (specifically Amplitude Damping, Dephasing, and Bitflip) using Collision Models.
 
-A map (channel) is a Semigroup if $![0ln45ij2k2xo9](img/0ln45ij2k2xo9.png)$.
-So, if $![0akkba2lt8ddu](img/0akkba2lt8ddu.png)$, we have:
-    $![1g6lhm95bdazv](img/1g6lhm95bdazv.png)$, and that should be equal to $![14jtysailp4a6](img/14jtysailp4a6.png)$.
-In this case the map is given in terms of its Kraus Operators $![0gvyfo7rty6ug](img/0gvyfo7rty6ug.png)$.
+The workflow revolves around evolving quantum states $\rho$ through a noise channel, attempting to reverse the noise using a Petz Recovery Map, and measuring the resulting Fidelity to determine if the quantum state was successfully preserved.
 
-![1porv23c8cn91](img/1porv23c8cn91.png)
+## 1. Prerequisites & Installation
 
-|  |  |
-| - | - |
-| 1 | 0 |
-| 0 | -Power- |
+### Step 1: Install Julia
+The recommended way to install and manage Julia versions is via [juliaup](https://github.com/JuliaLang/juliaup).
+### Step 2: Global Tools
+It is highly recommended to have `Revise.jl` installed in your global environment. 
+This allows you to modify code in `src/` and see changes instantly without restarting the REPL.
+Open a terminal and run:
+```bash
+julia -e 'using Pkg; Pkg.add("Revise")'
+```
+## 2. Setup
+Clone the repository and navigate into the folder:
+```bash 
+git clone https://github.com/fedesss98/shooting-decoherences.git
+cd shooting-decoherences
+```
+Here you'll find the functions to perform experiments in the Julia REPL.
+First, instantiate the project. 
+This downloads all required dependencies specified in `Project.toml`:
+```bash
+julia --project=. -e 'using Pkg; Pkg.instantiate()'
+```
+## 3. Workflow
+This project is designed to be run interactively via the Julia REPL. 
+We use a specific startup command to:
+- Activate the project environment;
+- Load `Revise` (for hot-reloading code);
+- Include the main simulation script (`scripts/main.jl`) using `includet` (track changes).
+### Fast StartupRun 
+this single command in your terminal from the project root:
+```bash 
+julia --project=. -e "using Revise; includet(\"scripts/main.jl\")" -i
+```
+*Note: The `-i` flag keeps the REPL open in interactive mode after the script loads.*
 
-|  |  |
-| - | - |
-| 0 | -Power- |
-| 0 | 0 |
+## 4. Running Experiments
+Once inside the REPL (you should see the `julia>` prompt), you can run simulations using the functions defined in `scripts/main.jl`.
 
-```wl
-In[]:= \[CapitalLambda][x_, t_] := Module[{k1t, k2t, \[Rho]t}, 
-    k1t = k1 /. \[Tau] -> t; 
-    k2t = k2 /. \[Tau] -> t; 
-    \[Rho]t = k1t . x . ConjugateTranspose[k1t] + k2t . x . ConjugateTranspose[k2t]; 
-    Simplify[\[Rho]t, Assumptions -> {\[CapitalGamma] > 0, t > 0 }] 
-   ]
+### Basic Experiment
+Run a single simulation comparing free evolution vs. Petz recovery. 
+You can override default parameters (`gamma`, `n_qubits`, etc.) via keyword arguments.
+```julia
+# Run a simple bitflip experiment on 3 qubits
+f1, f2, states, avg_fid = run_experiment("bitflip"; n_qubits=3, beta=0.5)
+```
+### Batch Experiments (Fig 3 of *The Reference*)
+To generate data for "Average Infidelity vs $n\beta$", use `run_fig3_experiment`.
+**Pro Tip**: Use `begin ... end` blocks in the REPL. 
+This allows you to paste multi-line configurations easily without the REPL executing lines prematurely.
+```julia
+begin
+    # Define plot points (x-axis values for n*beta)
+    points = [0.1, 0.5, 1.0, 1.5, 2.0]
+    
+    # Run experiment for different qubit sizes
+    run_fig3_experiment(
+        points, 
+        [3, 4, 5],       # List of N_qubits to test
+        "damping";       # Noise model
+        time=0.8,        # Time tau
+        plot=true        # Automatically generate the plot
+    )
+end
+```
+## Iterating Over Parameters
+If you need to sweep over multiple beta values and qubit counts and save the data to JSON:
+```julia 
+begin
+    betas_to_test = range(0.1, 1.0, length=5)
+    qubits_to_test = [2, 4]
+    
+    iterate_exps(
+        betas_to_test, 
+        qubits_to_test; 
+        noise_model="dephasing"
+    )
+end
 ```
 
-![0hfw810pta00o](img/0hfw810pta00o.png)
+## 5. Project Structure
+- `scripts/`: Contains execution scripts.
+    - `main.jl`: The primary entry point containing experiment runners (`run_experiment`) and plotting logic.
+- `src/`: The core library logic.
+    - `PetzMaps.jl`: Implementation of the recovery map math.
+    - `operators.jl` & `quantum_states.jl`: Definitions of quantum channels and state preparations.
+    - `DecoKiller.jl`: Main module wrapper.
+- `visualization/`: Folder where plots (.png, .pdf) are saved.
 
-```wl
-In[]:= \[Rho]\[Tau] = \[CapitalLambda][\[Rho], \[Tau]];
- \[Rho]\[Tau] // MatrixForm
-```
+## 6. Visualization
+Plots are automatically saved to the `../visualization/` directory relative to where the script is run. 
+Ensure this directory exists or the script may attempt to create it (depending on write permissions).
 
-|  |  |
-| - | - |
-| -Plus- | -Times- |
-| -Times- | -Times- |
-
-First we compute $![0b69w05lrme9p](img/0b69w05lrme9p.png)$,
-
-```wl
-In[]:= \[Rho]s = \[CapitalLambda][\[Rho], s];
- \[Rho]s // MatrixForm
-```
-
-|  |  |
-| - | - |
-| -Plus- | -Times- |
-| -Times- | -Times- |
-
-Then $![1emul94egtzfi](img/1emul94egtzfi.png)$,
-
-```wl
-In[]:= \[Rho]ts = \[CapitalLambda][\[Rho]s, t];
- \[Rho]ts // MatrixForm
-```
-
-|  |  |
-| - | - |
-| -Plus- | -Times- |
-| -Times- | -Times- |
-
-Now we check that this is equal to $![1r4o09bb3rsid](img/1r4o09bb3rsid.png)$,
-
-```wl
-In[]:= \[Rho]ts == \[CapitalLambda][\[Rho], t + s]
-```
-
-```wl
-Out[]= True
-```
-
-### Petz Recovery Map
-
-The recovery map is defined as: $![07s8y4jtvh77v](img/07s8y4jtvh77v.png)$, where $![0rdfi6ackpigq](img/0rdfi6ackpigq.png)$, such that:
-    $![1kydrr87iyxs5](img/1kydrr87iyxs5.png)$
-(we reversed the time evolution from $![1wrqr2ailbtf1](img/1wrqr2ailbtf1.png)$ to $![0twal053oyrhw](img/0twal053oyrhw.png)$.
-
-```wl
-In[]:= Petz[Ks_, t_, \[Sigma]_, \[Rho]_] := Module[{innerMatrix, Phi, PhiAdj, recovered}, 
-    Phi[rho_] := Total[(# . rho . ConjugateTranspose[#]) & /@ Ks /. \[Tau] -> t]; 
-    PhiAdj[X_] := Total[(ConjugateTranspose[#] . X . #) & /@ Ks /. \[Tau] -> t]; 
-    innerMatrix = (Phi[\[Sigma]])^(-1/2) . \[Rho] . (Phi[\[Sigma]])^(-1/2); (*TODO: Use the correct Power Operator for matrices (this takes the sqrt element by element)*)
-    recovered = \[Sigma]^(1/2) . PhiAdj[innerMatrix] . \[Sigma]^(1/2); 
-    FullSimplify[recovered, Assumptions -> {\[CapitalGamma] > 0, t > 0 }] 
-   ]
-```
+---
