@@ -20,7 +20,7 @@ end
 
 
 function overlap(ρ, σ::Matrix)
-    return real(tr(ρ, σ))
+    return real(tr(ρ * σ))
 end
 
 

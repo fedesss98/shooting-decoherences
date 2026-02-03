@@ -2,97 +2,89 @@
 Create the collisional Unitary Evolution that gives back a recovery map on the system.
 """
 
+include("../src/utils.jl")
 using DecoKiller.UnitaryDilation
+using DecoKiller.PetzMaps
+
 using LinearAlgebra
+using StatsBase
+using ProgressBars
 
 # System Variables
-d_S = 2  # System dimension (qubit)
-d_A = 4  # Ancilla dimension
+const d_S = 2  # System dimension (qubit)
+const d_A = 2  # Ancilla dimension
 
-a1 = 1.0
-a2 = 0.0
-b1 = 1.0
-b2 = 0.0
+const GAMMA     = 1.0
+const TIMESTEPS = 11
+const DT        = 0.1
+const TIME      = 1.0
+const N_STATES = 16 # How many states generated
+const N_QUBITS = 1  # Qubits to create a logic qubit
+const BETA = 0.5
 
-pa = 1/2
-pb = 1/2
+noise_models = [
+    (0.3, "bitflip"),
+    (0.5, "dephasing"),
+]
 
-target_state = pa * [a1, a2] * [a1, a2]' + pb * [b1, b2] * [b1, b2]' 
-
-kraus_operators = kraus_operators_recovery1(pa, pb, a1, a2, b1, b2)
-qubit_states = qubit_basis()
-ancilla_states = ancilla_basis(d_A)
-
-B_in = build_input_basis(d_S, d_A)
-
-function guess_output_vectors(qubit_states, ancilla_states, kraus_operators)
-    """Create the set of output orthonormal vectors"""
-    # Start creating the known outputs
-    known_in = qubit_states
-    B_out = Vector{Vector{ComplexF64}}(undef, d_S * d_A)
-    idx = 1
-    for inpt in known_in
-        B_out[idx] = isometry(inpt, ancilla_states, kraus_operators)
-        idx += 1
+function get_kruas_operators(noise, gamma, t)
+    if noise == "amplitude_damping"
+        return get_amplitudedamping_operators(gamma, t)
+    elseif noise == "dephasing"
+        return get_dephasing_operators(gamma, t)
+    elseif noise == "bitflip"
+        return get_bitflip_operators(gamma, t)
+    else
+        error("Unknown noise model: $noise")
     end
-    # Append the next candidates to be the unknown outputs of other inputs
-    for sk in qubit_states
-        for a in ancilla_states[2:end]
-            B_out[idx] = tensor(sk, a)
-            idx += 1
-        end
-    end
-
-
-    return [chop!(v) for v in B_out] 
+    
 end
 
-"""
-    find_orthonormal_outputs(candidates::Vector{Vector{ComplexF64}})
-
-
-"""
-function find_orthonormal_outputs!(known, candidates)
-    for (i, v) in enumerate(candidates)
-        v_ort = copy(v)
-        for u in known
-            v_ort -= dot(u, v) * u
-        end
-
-        if norm(v_ort) == 0.0
-            throw(ErrorException("Linear dependent vector among guesses!"))
-        end
-
-        v_ortnorm = v_ort / norm(v_ort)
-        push!(known, v_ortnorm)
-    end 
-
-    return known
+function forward_evolution(model, ρ)
+    kraus = model.kraus_fwd
+    ρf = apply_channel(kraus, ρ, N_QUBITS)
+    return ρf
 end
 
-function build_unitary_matrix(inputs, outputs)
-    d_SA = length(inputs)
-    U = Matrix{ComplexF64}(undef, d_SA, d_SA)
-    idx = 1
-    for (input, output) in zip(inputs, outputs)
-        U += output * input' 
+function recovery(model, ρ)
+    ρr, η = apply_petz_collision(model, ρ)
+    return ρr, η
+end
+
+function main()
+    # Create the reference state sigma
+    sigma = thermal_state(N_QUBITS, BETA)
+    fidelities = Float64[]
+    # State to recover
+    ρ0 = sigma  # Start from the reference state  
+    ρi = ρ0      
+    # Choose randomly a noise model
+    noise = sample([n[2] for n in noise_models], Weights([n[1] for n in noise_models]))
+    println("Selected noise model: $noise")
+
+    time_iter = ProgressBar(1:DT:TIMESTEPS)
+    for t in time_iter
+        set_description(time_iter, "$(round(t, digits=2))s")
+        # Get the forward Kraus operators for the randomly selected channel
+        kraus_fwd = get_kruas_operators(noise, GAMMA, t)
+
+        # Create the Petz Collision Model
+        petz_model = PetzCollisionModel(kraus_fwd, sigma)
+
+        # Evolve the system and recover it
+        ρf = forward_evolution(petz_model, ρi)
+        ρr, η = recovery(petz_model, ρf)
+
+        # Compute Fidelity and print results
+        fid_noise = fidelity(ρ0, ρf)
+        fid_recovery = fidelity(ρ0, ρr)
+        push!(fidelities, fid_noise)
+        push!(fidelities, fid_recovery)
+
+        ρi = ρr
+
     end
-
-    return U
+    return fidelities
 end
 
-B_cand = guess_output_vectors(qubit_states, ancilla_states, kraus_operators)
-B_out = find_orthonormal_outputs(B_cand[1:d_S], B_cand[d_S + 1:end])
-U = build_unitary_matrix(B_in, B_out)
-
-display(U)
-# Unitary Check
-dimension = tr(U' * U)
-println("Trace U'U = $dimension")
-
-# Create a random qubit state
-psi = randn(ComplexF64, 2)
-psi = psi / norm(psi)
-rho_collision = U * kron(psi * psi', ancilla_states[1] * ancilla_states[1]')
-recovered = partial_trace_ancilla(rho, d_S, d_A) 
-
+main()

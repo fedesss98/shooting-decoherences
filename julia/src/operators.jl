@@ -3,34 +3,6 @@ const Z  = [1.0+0.0im 0.0; 0.0 -1.0]
 const X  = [0.0im 1.0; 1.0 0.0]
 
 
-"""
-    density_matrix(a)
-
-a ∈ [-1, 1]
-|ψ> = a|0⟩ + √(1-a²)|1⟩
-"""
-function density_matrix(a)
-    v = [a, sqrt(1 - a^2)]
-    return v * v'
-end
-
-"""
-    codespace_state(n_qubits, a, b)
-
-Create a logic qubit a|00...0> + b|11...1>,
-where we adopt the convention that |00...0> is at index 1
-of the 2^n_qubits state vector and |11...1> is at index n_qubits
-"""
-function codespace_state(n_qubits, a, b, c, d)
-    psi = zeros(ComplexF64, 2^n_qubits)
-    psi[1] = a
-    psi[2] = c
-    psi[4] = d
-    psi[end] = b
-    psi = normalize(psi)
-    return psi * psi'
-end
-
 
 
 """
@@ -88,6 +60,10 @@ Applies the amplitude damping channel for all n qubits in the system sequentiall
 """
 function apply_channel(kraus, ρ, n_qubits::Int)
     ρi = copy(ρ)
+    
+    if n_qubits == 1
+        return apply_channel(kraus, ρ)
+    end
 
     for qubit in 1:n_qubits
         ρf = zeros(ComplexF64, size(ρ))
@@ -125,7 +101,7 @@ function partial_recovery_function(kraus, σ, n_qubits)
 end
 
 """
-    recovery_map(gamma, t, σ, ρ)
+    recovery_map(kraus, σ, ρ)
 Returns the recovery map as a function of the new state to be recovered only
 """
 function recovery_map(kraus, σ, ρ)
@@ -164,7 +140,7 @@ as `Matrix{ComplexF64}`, such that
 
 for all ρ in the d-dimensional system.
 """
-function get_kraus_from_map(E::Function, d::Int; tol=1e-10)
+function get_kraus_from_map(E::Function; d::Int, tol=1e-10)
     # Build Choi matrix J of size d^2 × d^2
     J = zeros(ComplexF64, d^2, d^2)
 
@@ -191,7 +167,7 @@ function get_kraus_from_map(E::Function, d::Int; tol=1e-10)
     evals, evecs = eigen(Hermitian(J))
 
     kraus = Matrix{ComplexF64}[]
-    for k in 1:length(evals)
+    for k in eachindex(evals)
         λ = evals[k]
         if λ > tol
             v = evecs[:, k]              # length d^2
