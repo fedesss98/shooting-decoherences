@@ -41,17 +41,6 @@ function get_kraus_operators(noise, gamma, t)
 
 end
 
-function forward_evolution(model, ρ)
-  kraus = model.kraus_fwd
-  ρf = apply_channel(kraus, ρ, N_QUBITS)
-  return ρf
-end
-
-function recovery(model, ρ)
-  ρr, η = apply_petz_collision(model, ρ)
-  return ρr, η
-end
-
 
 function kraus_to_superop(kraus_ops)
     d = size(kraus_ops[1], 1)
@@ -76,15 +65,24 @@ end
 
 
 function main()
-  # Create the reference state sigma
-  sigma = thermal_state(N_QUBITS, BETA)
   fidelities = Float64[]
-  # State to recover
-  ρ0 = sigma  # Start from the reference state  
-  ρi = ρ0
+
   # Choose randomly a noise model
   noise = sample([n[2] for n in noise_models], Weights([n[1] for n in noise_models]))
   println("Selected noise model: $noise")
+
+  # Create the reference state sigma
+  sigma = thermal_state(N_QUBITS, BETA)
+  println("\nReference state σ:")
+  display(sigma)
+  # Start from a random pure state
+  psi = random_state(N_QUBITS)
+  ρ0 = psi * psi'  
+  println("\nInitial random state ρ0:")
+  display(ρ0)
+
+  # T1 : initialization
+
   current_kraus = get_kraus_operators(noise, GAMMA, DT)
   current_channel = ρ -> apply_channel(current_kraus, ρ, N_QUBITS)
 
@@ -117,49 +115,78 @@ end
 
 # main()
 
-function prove_one_recovery()
+function prove_recovery(; n=2, noise="amplitude_damping")
   println(now())
+
+  states = Matrix{ComplexF64}[]
+  fidelities = Float64[]
+
   # Create the reference state sigma
   sigma = thermal_state(N_QUBITS, BETA)
-  println("Reference state σ:")
+  println("\nReference state σ:")
   display(sigma)
   psi = random_state(N_QUBITS)
   ρ0 = psi * psi'  # Start from a random pure state
-  println("Initial random state ρ0:")
+  println("\nInitial random state ρ0:")
   display(ρ0)
   
-  # Choose randomly a noise model
-  kraus_fw = get_kraus_operators("amplitude_damping", GAMMA, 10*DT)
+  # Choose the noise model
+  kraus_fwd = get_kraus_operators(noise, GAMMA, 10*DT)
 
   # Step 1
   # N = Omega_a
-  println("\n-- STEP 1: Noise channel = Ω[ρ0]")
+  println("\n-- STEP 1: Noise channel = Ω[σ]")
   
-  petz_model = PetzCollisionModel(kraus_fw, ρ0)
-  ρf = forward_evolution(petz_model, ρ0)
-  ρr, _ = recovery(petz_model, ρf)
+  petz_model = PetzCollisionModel(kraus_fwd, ρ0)
+
+  ρf = apply_channel(petz_model.kraus_fwd, ρ0, N_QUBITS)
+  # Enforce physicality (hermitianicity and trace 1)
+  enforce_physical!(ρf)
+  ρr, _ = apply_petz_collision(petz_model, ρf)
+  enforce_physical!(ρr)
   # Compute Fidelity
   println("Fidelity after noise: $(fidelity(ρ0, ρf))")
   println("Fidelity after recovery: $(fidelity(ρ0, ρr))")
   
-  # Step 2 
-  # N = Omega_a ∘ PetzCollision ∘ Omega_a
-  println("\n-- STEP 2: Noise channel = Ω[Tr[U Ω[ρ0]⊗|0><0| U†]]")
+  # Setup next evolutions
+  _, M_total = build_step_matrix(petz_model)
 
-  M_petz, M_noise = build_step_matrix(petz_model)
-  M_total = M_noise * M_petz * M_noise
-  petz_model = PetzCollisionModel(M_total, ρ0)
+  for i in 2:n
+    # N = Omega_a ∘ PetzCollision ∘ N
+    println("\n-- STEP $i: Noise channel = Ω[Tr[U N[σ]⊗|0><0| U†]]")
+    M_petz, M_noise = build_step_matrix(petz_model)
+    # Add the Petz collision and the noise to the total supermap
+    M_total = M_noise * M_petz * M_total
+    # Update the collision model
+    petz_model = PetzCollisionModel(M_total, ρ0)
 
-  ρf = forward_evolution(petz_model, ρr)
-  ρr, _ = recovery(petz_model, ρf)
-  # Compute Fidelity
-  println("Fidelity after noise (2 steps): $(fidelity(ρ0, ρf))")
-  println("Fidelity after recovery (2 steps): $(fidelity(ρ0, ρr))")
+    ρf = apply_channel(petz_model.kraus_fwd, ρr, N_QUBITS)
+    enforce_physical!(ρf)
+    ρr, _ = apply_petz_collision(petz_model, ρf)
+    enforce_physical!(ρr)
+
+    # Compute Fidelity
+    println("Fidelity after noise: $(fidelity(ρ0, ρf))")
+    println("Fidelity after recovery: $(fidelity(ρ0, ρr))")
+
+    push!(fidelities, fidelity(ρ0, ρf))
+    push!(fidelities, fidelity(ρ0, ρr))
+    push!(states, ρf)
+    push!(states, ρr)
+
+  end
+
+  println("\nFinal noisy state:")
+  display(ρf)
+  println("\nFinal recovered state ρr:")
+  display(ρr)
+
+  return states, fidelities
 
 end
 
 
-function prove_autorecovery(; n=2)
+function prove_autorecovery(; n=2, noise="bitflip")
   println(now())
   println("==== AUTORECOVERY TEST ====")
   println("We test that a reference state σ is recovered")
@@ -172,32 +199,42 @@ function prove_autorecovery(; n=2)
   # WARNING: only some state are well recovered, depending on the noise
   sigma = thermal_state(N_QUBITS, BETA)
   ρ0 = sigma
-  # Choose randomly a noise model
-  kraus_fw = get_kraus_operators("amplitude_damping", GAMMA, 10*DT)
+  # Choose the noise model
+  kraus_fwd = get_kraus_operators(noise, GAMMA, 10*DT)
 
   # Step 1
   # N = Omega_a
   println("\n-- STEP 1: Noise channel = Ω[σ]")
   
-  petz_model = PetzCollisionModel(kraus_fw, ρ0)
-  ρf = forward_evolution(petz_model, ρ0)
-  ρr, _ = recovery(petz_model, ρf)
+  petz_model = PetzCollisionModel(kraus_fwd, ρ0)
+
+  ρf = apply_channel(petz_model.kraus_fwd, ρ0, N_QUBITS)
+  # Enforce physicality (hermitianicity and trace 1)
+  enforce_physical!(ρf)
+  ρr, _ = apply_petz_collision(petz_model, ρf)
+  enforce_physical!(ρr)
   # Compute Fidelity
-  println("Fidelity after noise: $(fidelity(sigma, ρf))")
-  println("Fidelity after recovery: $(fidelity(sigma, ρr))")
+  println("Fidelity after noise: $(fidelity(ρ0, ρf))")
+  println("Fidelity after recovery: $(fidelity(ρ0, ρr))")
   
-  # Step 2 
-  # N = Omega_a ∘ PetzCollision ∘ Omega_a
-  println("\n-- STEP 2: Noise channel = Ω[Tr[U Ω[σ]⊗|0><0| U†]]")
+  # Setup next evolutions
+  _, M_total = build_step_matrix(petz_model)
 
-  M_petz, M_noise = build_step_matrix(petz_model)
-  M_total = M_noise * M_petz * M_noise
-  petz_model = PetzCollisionModel(M_total, ρ0)
+  for i in 2:n
+    # N = Omega_a ∘ PetzCollision ∘ N
+    println("\n-- STEP $i: Noise channel = Ω[Tr[U N[σ]⊗|0><0| U†]]")
+    M_petz, M_noise = build_step_matrix(petz_model)
+    # Add the Petz collision and the noise to the total supermap
+    M_total = M_noise * M_petz * M_total
+    # Update the collision model
+    petz_model = PetzCollisionModel(M_total, ρ0)
 
-  ρf = forward_evolution(petz_model, ρr)
-  ρr, _ = recovery(petz_model, ρf)
-  # Compute Fidelity
-  println("Fidelity after noise (2 steps): $(fidelity(sigma, ρf))")
-  println("Fidelity after recovery (2 steps): $(fidelity(sigma, ρr))")
-
+    ρf = apply_channel(petz_model.kraus_fwd, ρr, N_QUBITS)
+    enforce_physical!(ρf)
+    ρr, _ = apply_petz_collision(petz_model, ρf)
+    enforce_physical!(ρr)
+    # Compute Fidelity
+    println("Fidelity after noise: $(fidelity(ρ0, ρf))")
+    println("Fidelity after recovery: $(fidelity(ρ0, ρr))")
+  end
 end
