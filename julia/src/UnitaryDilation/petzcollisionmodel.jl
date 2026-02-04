@@ -29,71 +29,115 @@ function PetzCollisionModel(kraus_fwd::Vector{Matrix{T1}}, sigma::Matrix{T2}) wh
     sigma = Matrix{T}(sigma)
     kraus_fwd = [Matrix{T}(K) for K in kraus_fwd]
 
-    d = size(kraus_fwd[1], 1)
-    m = length(kraus_fwd)
+    d_sys = size(sigma, 1)
+    d_anc = length(kraus_fwd) # Ancilla dimension = number of Kraus ops
     
-    # Compute Forward Action on Sigma: N(σ) = ∑ K σ K'
+    # 1. Compute Forward Action on Sigma: N(σ) = ∑ K σ K'
     N_sigma = sum(K * sigma * K' for K in kraus_fwd)
-    
+
     # 2. Compute Petz Recovery Kraus Ops: R_i = σ^(1/2) K_i' N(σ)^(-1/2)
     # Note: Using pinv for stability, assuming Hermitian matrices
-    sqrt_sigma = sqrt(Hermitian(sigma))
-    inv_sqrt_N_sigma = inv(sqrt(Hermitian(N_sigma + 1e-10*I)))
-    
-    kraus_rec = [sqrt_sigma * K' * inv_sqrt_N_sigma for K in kraus_fwd]
+    σ_sqrt = sqrt(Hermitian(sigma))
+    σ_out_inv_sqrt = inv(sqrt(Hermitian(N_sigma + 1e-10*I)))
+    kraus_rec = [σ_sqrt * K' * σ_out_inv_sqrt for K in kraus_fwd]
 
     # 3. Generate the Collision Unitary U
     # Total dimension = System ⊗ Ancilla
-    d_tot = d * m
+    d_tot = d_sys * d_anc
     
-    # We construct the first d columns of U.
+    # We construct the first d_sys columns of U.
     # These columns define the action U(ρ ⊗ |0><0|) U'.
     # Column j corresponds to input state |j>_S ⊗ |0>_E.
     # Formula: U |j, 0> = ∑_i (R_i |j>) ⊗ |i>_E
     
-    # Stinespring unitary
-    U = zeros(T, d*m, d*m)
-    for i in 1:m
-        U[1:d, (i-1)*d+1:i*d] = kraus_rec[i]
+    # Pre-allocate the "known" part of the unitary (V)
+    V = zeros(T, d_tot, d_sys)
+    
+    # System basis vectors
+    sys_basis = [zeros(T, d_sys) for _ in 1:d_sys]
+    for k in 1:d_sys; sys_basis[k][k] = 1.0; end
+
+    # Ancilla basis vectors
+    anc_basis = [zeros(T, d_anc) for _ in 1:d_anc]
+    for k in 1:d_anc; anc_basis[k][k] = 1.0; end
+
+    for j in 1:d_sys
+        input_vec = sys_basis[j] # |j>
+        
+        # Calculate the resulting vector in the joint space
+        output_vec_joint = zeros(T, d_tot)
+        
+        for i in 1:d_anc
+            # Apply Recovery operator i to system state j
+            transformed_sys = kraus_rec[i] * input_vec
+            
+            # Tensor product with ancilla state |i>
+            # joint index = (sys_idx - 1) * d_anc + anc_idx (Julia uses Column Major, but kron is standard)
+            # We use Julia's kron: kron(A, B) computes A ⊗ B.
+            # Here we need transformed_sys ⊗ |i>_anc
+            term = kron(transformed_sys, anc_basis[i])
+            output_vec_joint += term
+        end
+        
+        V[:, j] = output_vec_joint
     end
-    
-    # Complete to unitary
-    Q = Matrix(qr(U).Q)
-    U = size(Q) == (d*m, d*m) ? Q : [U zeros(T, d*m, d*m - size(U,2))]
-    
-    PetzCollisionModel(d, m, sigma, kraus_fwd, kraus_rec, U)
+
+    # 4. Complete the Unitary
+    # We have V (d_tot x d_sys) which is isometric (V'V = I).
+    # We need to fill the remaining columns to make it square and unitary.
+    # QR decomposition is a numerically stable way to do this.
+    # If A = QR, and A has orthonormal columns, Q's first columns are A.
+    Q_fact = qr(V)
+    # FORCE FULL SQUARE MATRIX:
+    # Multiply Q (which acts like a operator) by the full Identity matrix
+    U_full = Q_fact.Q * Matrix{T}(I, d_tot, d_tot)
+
+    return PetzCollisionModel(d_sys, d_anc, sigma, kraus_fwd, kraus_rec, U_full)
 end
 
 
 """
-    PetzCollisionModel(noise_channel::Function, gamma, sigma)
+    PetzCollisionModel(noise_channel::Function, gamma, sigma; nsteps=100)
 
 Constructor for when Kraus operators are unknown. The noise channel is given as
-a function `noise_channel(rho, gamma)` that applies the channel with parameter gamma.
+a function `noise_channel(rho, gamma)` that returns the output state.
 
-Extracts Kraus operators via Choi-Jamiolkowski isomorphism:
-- Construct Choi matrix by applying channel to each basis element
-- Eigendecompose to get Kraus operators
+The Petz recovery is constructed by numerical Choi-Jamiolkowski:
+- Discretize gamma ∈ [0, gamma] into `nsteps`
+- Compute dΦ/dγ ≈ (Φ(γ+dγ) - Φ(γ))/dγ
+- Extract Kraus operators via eigendecomposition of Choi matrix
 """
-function PetzCollisionModel(noise_channel::Function, sigma::Matrix{T}) where T<:Number
+function PetzCollisionModel(noise_channel::Function, gamma::Real, sigma::Matrix{T}; 
+                            nsteps::Int=100) where T<:Number
     d = size(sigma, 1)
     
-    # Construct Choi matrix: J = sum_ij |i⟩⟨j| ⊗ Φ(|i⟩⟨j|)
-    choi = zeros(T, d*d, d*d)
-    for i in 1:d, j in 1:d
-        input = zeros(T, d, d)
-        input[i, j] = one(T)
-        output = noise_channel(input)
-        for k in 1:d, l in 1:d
-            choi[(i-1)*d+k, (j-1)*d+l] = output[k, l]
+    # Maximize basis for Choi matrix
+    max_ent = sum(kron(Matrix{T}(I, d, d)[:, i:i], Matrix{T}(I, d, d)[:, i:i]) 
+                  for i in 1:d) / sqrt(d)
+    rho_max = max_ent * max_ent'
+    
+    # Apply channel to maximally entangled state
+    # Φ ⊗ I acting on |Ψ⟩⟨Ψ| gives Choi matrix
+    function choi_matrix(γ)
+        choi = zeros(T, d*d, d*d)
+        for i in 1:d, j in 1:d
+            input = zeros(T, d, d)
+            input[i, j] = one(T)
+            output = noise_channel(input, γ)
+            for k in 1:d, l in 1:d
+                choi[(i-1)*d+k, (j-1)*d+l] = output[k, l]
+            end
         end
+        return choi
     end
     
-    # Symmetrize for numerical stability
-    choi = (choi + choi') / 2
+    # Derivative at gamma
+    dγ = gamma / nsteps
+    J = (choi_matrix(gamma + dγ) - choi_matrix(gamma)) / dγ
+    J = (J + J') / 2  # Symmetrize
     
     # Extract Kraus from Choi eigendecomposition
-    vals, vecs = eigen(Hermitian(choi))
+    vals, vecs = eigen(Hermitian(J))
     kraus_fwd = Matrix{T}[]
     for i in 1:d*d
         if real(vals[i]) > 1e-12
@@ -106,7 +150,6 @@ function PetzCollisionModel(noise_channel::Function, sigma::Matrix{T}) where T<:
     
     PetzCollisionModel(kraus_fwd, sigma)
 end
-
 
 """
     PetzCollisionModel(M::Matrix, sigma::Matrix)
