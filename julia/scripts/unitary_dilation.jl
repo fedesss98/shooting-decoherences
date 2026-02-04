@@ -41,30 +41,34 @@ function get_kraus_operators(noise, gamma, t)
 
 end
 
-
-function kraus_to_superop(kraus_ops)
-    d = size(kraus_ops[1], 1)
-    superop = zeros(ComplexF64, d^2, d^2)
-    for K in kraus_ops
-        superop += kron(conj(K), K)
-    end
-    return superop
-end
-
-"""
-  build_step_matrix(model)
-Builds the superoperator matrix which implements the n+1 evolution step:
-collision + noise
-"""
-function build_step_matrix(model)
-  M_petz = kraus_to_superop(model.kraus_rec)
-  M_noise = kraus_to_superop(model.kraus_fwd)
-
-  return M_petz, M_noise
+function apply_noise(model, ρ, n_qubits)
+  ρf = apply_channel(model.kraus_fwd, ρ, n_qubits)
+  # Enforce physicality (hermitianicity and trace 1)
+  enforce_physical!(ρf)
+  return ρf
 end
 
 
-function main()
+function recovery(model, ρ)
+  ρr, η = apply_petz_collision(model, ρ)
+  enforce_physical!(ρr)
+  return ρr, η
+end
+
+
+function discrimin(ρ_test, ρ1, ρ2)
+  return (0.75, 0.25)
+end
+
+
+function main(
+  n_qubits      = N_QUBITS,
+  noise_models  = noise_models,
+  gamma         = GAMMA,
+  beta          = BETA,
+  timesteps     = TIMESTEPS,
+  dt            = DT
+)
   fidelities = Float64[]
 
   # Choose randomly a noise model

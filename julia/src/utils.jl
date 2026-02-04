@@ -201,3 +201,26 @@ function enforce_physical!(rho::Matrix{ComplexF64})
     end
     return rho
 end
+
+
+
+function kraus_to_superop(kraus_ops)
+    d = size(kraus_ops[1], 1)
+    superop = zeros(ComplexF64, d^2, d^2)
+    for K in kraus_ops
+        superop += kron(conj(K), K)
+    end
+    return superop
+end
+
+"""
+  build_superoperators(model)
+Builds the superoperator matrix which implements the n+1 evolution step:
+collision + noise
+"""
+function build_superoperators(model)
+  M_petz = kraus_to_superop(model.kraus_rec)
+  M_noise = kraus_to_superop(model.kraus_fwd)
+
+  return M_petz, M_noise
+end
