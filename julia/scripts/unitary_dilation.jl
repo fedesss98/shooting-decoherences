@@ -10,6 +10,7 @@ using LinearAlgebra
 using StatsBase
 using ProgressBars
 using Dates
+using Random
 
 # System Variables
 const d_S = 2  # System dimension (qubit)
@@ -67,20 +68,25 @@ function main(
   gamma         = GAMMA,
   beta          = BETA,
   timesteps     = TIMESTEPS,
-  dt            = DT
+  dt            = DT,
+  seed          = nothing
 )
+  rng = isnothing(seed) ? Random.default_rng() : Xoshiro(seed)  # For reproducibility
   fidelities = Float64[]
 
   # Choose randomly a noise model
-  noise = sample([n[2] for n in noise_models], Weights([n[1] for n in noise_models]))
-  println("Selected noise model: $noise")
+  noise = sample(rng,
+    [n[2] for n in noise_models], 
+    Weights([n[1] for n in noise_models])
+  )
+  println("\nSELECTED NOISE MODEL: $noise")
 
   # Create the reference state sigma
   sigma = thermal_state(N_QUBITS, BETA)
   println("\nReference state σ:")
   display(sigma)
   # Start from a random pure state
-  psi = random_state(N_QUBITS)
+  psi = random_state(n_qubits; seed=seed)
   ρ0 = psi * psi'  
   println("\nInitial random state ρ0:")
   display(ρ0)

@@ -92,9 +92,10 @@ end
     random_state(n_qubits)
 Sample uniformly in the sphere
 """
-function random_state(n_qubits)
-    ϕ = 2 * rand() * π
-    z = 2 * rand() - 1
+function random_state(n_qubits; seed=nothing)
+    rng = isnothing(seed) ? Random.default_rng() : Xoshiro(seed)
+    ϕ = 2 * rand(rng) * π
+    z = 2 * rand(rng) - 1
 
     θ = acos(z)
 

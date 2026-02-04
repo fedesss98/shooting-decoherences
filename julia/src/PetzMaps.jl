@@ -1,6 +1,7 @@
 module PetzMaps
 
 using LinearAlgebra
+using Random
 
 export 
 get_dephasing_operators, get_amplitudedamping_operators, get_bitflip_operators, 
