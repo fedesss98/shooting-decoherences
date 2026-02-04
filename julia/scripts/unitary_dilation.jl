@@ -137,7 +137,7 @@ function prove_recovery(; n=2, noise="amplitude_damping")
   # N = Omega_a
   println("\n-- STEP 1: Noise channel = Ω[σ]")
   
-  petz_model = PetzCollisionModel(kraus_fwd, ρ0)
+  petz_model = PetzCollisionModel(kraus_fwd, sigma)
 
   ρf = apply_channel(petz_model.kraus_fwd, ρ0, N_QUBITS)
   # Enforce physicality (hermitianicity and trace 1)
@@ -149,16 +149,16 @@ function prove_recovery(; n=2, noise="amplitude_damping")
   println("Fidelity after recovery: $(fidelity(ρ0, ρr))")
   
   # Setup next evolutions
-  _, M_total = build_step_matrix(petz_model)
+  _, M_total = build_superoperators(petz_model)
 
   for i in 2:n
     # N = Omega_a ∘ PetzCollision ∘ N
     println("\n-- STEP $i: Noise channel = Ω[Tr[U N[σ]⊗|0><0| U†]]")
-    M_petz, M_noise = build_step_matrix(petz_model)
+    M_petz, M_noise = build_superoperators(petz_model)
     # Add the Petz collision and the noise to the total supermap
     M_total = M_noise * M_petz * M_total
     # Update the collision model
-    petz_model = PetzCollisionModel(M_total, ρ0)
+    petz_model = PetzCollisionModel(M_total, sigma)
 
     ρf = apply_channel(petz_model.kraus_fwd, ρr, N_QUBITS)
     enforce_physical!(ρf)
@@ -218,12 +218,12 @@ function prove_autorecovery(; n=2, noise="bitflip")
   println("Fidelity after recovery: $(fidelity(ρ0, ρr))")
   
   # Setup next evolutions
-  _, M_total = build_step_matrix(petz_model)
+  _, M_total = build_superoperators(petz_model)
 
   for i in 2:n
     # N = Omega_a ∘ PetzCollision ∘ N
     println("\n-- STEP $i: Noise channel = Ω[Tr[U N[σ]⊗|0><0| U†]]")
-    M_petz, M_noise = build_step_matrix(petz_model)
+    M_petz, M_noise = build_superoperators(petz_model)
     # Add the Petz collision and the noise to the total supermap
     M_total = M_noise * M_petz * M_total
     # Update the collision model
