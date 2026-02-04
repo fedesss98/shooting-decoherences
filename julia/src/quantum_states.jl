@@ -61,6 +61,10 @@ end
 Create a random input state for n qubits of the form a|00...0> + b|11...1>
 """
 function input_state(n, a, b)
+    # Ground and excited states of one qubit
+    g0 = [0.0 + 0.0im; 1.0]
+    e1 = [1.0 + 0.0im; 0.0]
+    
     ground = foldl(kron, [g0 for _ in 1:n])
     excited = foldl(kron, [e1 for _ in 1:n])
     state = normalize(a * ground + b * excited)
@@ -82,6 +86,22 @@ function codespace_state(n_qubits, a, b, c, d)
     psi[end] = b
     psi = normalize(psi)
     return psi * psi'
+end
+
+"""
+    random_state(n_qubits)
+Sample uniformly in the sphere
+"""
+function random_state(n_qubits)
+    ϕ = 2 * rand() * π
+    z = 2 * rand() - 1
+
+    θ = acos(z)
+
+    α = cos(θ / 2)
+    β = exp(im * ϕ) * sin(θ / 2)
+
+    return input_state(n_qubits, α, β)
 end
 
 
