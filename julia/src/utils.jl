@@ -184,3 +184,20 @@ function isometry(system_state::Vector, ancilla_basis, kraus_operators)
     end
     return result
 end
+
+
+"""
+Enforces physical validity: Hermiticity and Normalization.
+Removes imaginary noise from diagonal and resets Trace to 1.
+"""
+function enforce_physical!(rho::Matrix{ComplexF64})
+    # 1. Symmetrize to remove imaginary drift (force Hermiticity)
+    rho .= (rho .+ rho') ./ 2
+    
+    # 2. Normalize Trace (fix Petz contraction)
+    tr_val = real(tr(rho))
+    if tr_val > 1e-12
+        rho ./= tr_val
+    end
+    return rho
+end
