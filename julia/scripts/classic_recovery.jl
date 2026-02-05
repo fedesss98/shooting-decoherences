@@ -74,7 +74,8 @@ function run_experiment(
     γ = thermal_state(n_qubits, beta)
     ψ0 = zeros(ComplexF64, 2^n_qubits)
     
-    for i in ProgressBar(1:n_states)
+    iter = ProgressBar(1:n_states)
+    for i in iter
         if i == 1
             ρ0 = deepcopy(γ)
             a=b=-1
@@ -87,10 +88,11 @@ function run_experiment(
 
         f1s_sigma = []
         f2s_sigma = []
+        dt = (times[end] - times[1]) / (length(times) - 1)
         for t in times
 
             # Evolve the states
-            kraus = get_kraus_operators(noise_model, gamma, t)
+            kraus = get_kraus_operators(noise_model, gamma, dt)
             ρ1 = apply_channel(kraus, ρ1, n_qubits)
             ρ2 = apply_channel(kraus, ρ2, n_qubits)
             # Recover only the second state
@@ -103,7 +105,7 @@ function run_experiment(
             append!(f1s_sigma, f1)
             append!(f2s_sigma, f2)
 
-            println("Time $t\nFidelity after noise: $f1\nFidelity after recovery: $f2")
+            println(iter, "Time $t\nFidelity after noise: $f1\nFidelity after recovery: $f2")
             if i!=1
                 avg_fs[t] += overlap(ρ2, ψ0) / (n_states-1)
             end
@@ -177,7 +179,7 @@ function run_fig3_experiment(
         # every plot point is n*beta
         betas = plot_points ./ n
         for beta in betas
-            γ = starting_state(n, beta)
+            γ = thermal_state(n, beta)
             ψ0 = zeros(ComplexF64, 2^n)
             
             f1s = []
