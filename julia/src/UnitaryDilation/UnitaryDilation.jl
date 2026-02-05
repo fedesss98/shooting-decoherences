@@ -27,50 +27,52 @@ function apply_petz_collision(model::PetzCollisionModel, rho::Matrix{T}) where T
     anc_0 = zeros(T, d_a, d_a)
     anc_0[1, 1] = 1.0
     
-    joint_rho = kron(rho, anc_0)
+    rho_total = kron(rho, anc_0)
     
     # 2. Apply Unitary: U (ρ ⊗ |0><0|) U†
-    rho_prime_joint = model.U * joint_rho * model.U'
+    rho_after = model.U * rho_total * model.U'
     
     # 3. Partial Trace over Ancilla
     # We sum over the diagonal blocks of the ancilla
-    rho_out = zeros(T, d_s, d_s)
     
     # Indexing logic for Partial Trace (System ⊗ Ancilla)
     # Block (i, j) of size d_a x d_a corresponds to system indices i, j
     # But standard kron(S, A) interleaves differently. 
     # Let's do it explicitly based on indices:
     # Index I in joint space = (i_sys - 1)*d_anc + i_anc
-    rho_sys_out = zeros(T, d_s, d_s)
+    # rho_sys_out = zeros(T, d_s, d_s)
     
-    for i in 1:d_s
-        for j in 1:d_s
-            # Locate the (i, j) block of size d_a x d_a
-            row_start = (i - 1) * d_a + 1
-            col_start = (j - 1) * d_a + 1
+    # for i in 1:d_s
+    #     for j in 1:d_s
+    #         # Locate the (i, j) block of size d_a x d_a
+    #         row_start = (i - 1) * d_a + 1
+    #         col_start = (j - 1) * d_a + 1
             
-            # Trace this block
-            val = zero(T)
-            for k in 0:(d_a - 1)
-                val += rho_prime_joint[row_start + k, col_start + k]
-            end
-            rho_sys_out[i, j] = val
-        end
-    end
+    #         # Trace this block
+    #         val = zero(T)
+    #         for k in 0:(d_a - 1)
+    #             val += rho_after[row_start + k, col_start + k]
+    #         end
+    #         rho_sys_out[i, j] = val
+    #     end
+    # end
 
     # Partial Trace over System
     # (Sum the diagonal blocks)
-    sigma_anc_out = zeros(T, d_a, d_a)
+    # sigma_anc_out = zeros(T, d_a, d_a)
     
-    for i in 1:d_s
-        # Extract the i-th diagonal block corresponding to system index i
-        idx_start = (i - 1) * d_a + 1
-        idx_end   = i * d_a
+    # for i in 1:d_s
+    #     # Extract the i-th diagonal block corresponding to system index i
+    #     idx_start = (i - 1) * d_a + 1
+    #     idx_end   = i * d_a
         
-        sigma_anc_out += rho_prime_joint[idx_start:idx_end, idx_start:idx_end]
-    end
+    #     sigma_anc_out += rho_after[idx_start:idx_end, idx_start:idx_end]
+    # end
+
+    rho_sys_out = sum(rho_after[(i-1)*d_s+1:i*d_s, (i-1)*d_s+1:i*d_s] for i in 1:d_a)
+    rho_anc_out = sum(rho_after[i:d_s:end, j:d_s:end] for i in 1:d_s, j in 1:d_s if i==j)
     
-    return (rho_sys_out, sigma_anc_out)
+    return (rho_sys_out, rho_anc_out)
 end
 
 # function apply_petz_collision(model::PetzCollisionModel, rho::Matrix{T}) where T
