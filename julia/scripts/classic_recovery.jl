@@ -21,7 +21,7 @@ using JSON                # Save outputs
 const GAMMA    = 1.0
 const TIMES    = range(0.0, 1, 101)  # The number of items should be even
 const N_STATES = 16 # How many states generated
-const N_QUBITS = 5 # Qubits to create a logic qubit
+const N_QUBITS = 1 # Qubits to create a logic qubit
 const BETA = 0.5
 
 const I2 = [1.0+0.0im 0.0; 0.0 1.0]
@@ -30,66 +30,18 @@ const g0 = [0.0 + 0.0im; 1.0]
 const e1 = [1.0 + 0.0im; 0.0]
 
 
-function fullrank_state(n_qubits)
-    Random.seed!(1234)
-    coeffs = normalize(randn(Float64, 2^n_qubits))
-    println(coeffs)
-    r = zeros(ComplexF64, 2^n_qubits, 2^n_qubits)
-    for (i, c) in enumerate(coeffs)
-        psi = zeros(ComplexF64, 2^n_qubits)
-        psi[i] = c
-        r += psi * psi'
-    end
-    return r
-end
 
+function get_kraus_operators(noise, gamma, t)
+  if noise == "amplitude_damping"
+    return get_amplitudedamping_operators(gamma, t)
+  elseif noise == "dephasing"
+    return get_dephasing_operators(gamma, t)
+  elseif noise == "bitflip"
+    return get_bitflip_operators(gamma, t)
+  else
+    error("Unknown noise model: $noise")
+  end
 
-function starting_state(n, beta)
-    σz = [1.0+0.0im 0; 0 -1]
-    q = zeros(ComplexF64, 2^n, 2^n)
-    for i in 1:n
-        for j in 1:i-1
-            σz_i = foldl(kron, [k == i ? σz : I2 for k in 1:n])
-            σz_j = foldl(kron, [k == j ? σz : I2 for k in 1:n])
-            q += σz_i * σz_j
-        end
-    end
-    return exp(beta * q) / tr(exp(beta * q))
-
-end
-
-
-function input_state(n, a, b)
-    ground = foldl(kron, [g0 for _ in 1:n])
-    excited = foldl(kron, [e1 for _ in 1:n])
-    state = normalize(a * ground + b * excited)
-    return state
-end
-
-
-function get_kraus_operators(process, gamma, t)
-    if process == "dephasing"
-        kraus = get_dephasing_operators(gamma, t)
-    elseif process == "damping"
-        kraus = get_amplitudedamping_operators(gamma, t)
-    elseif process == "bitflip"
-        kraus = get_bitflip_operators(gamma, t)
-    end
-    return kraus 
-end
-
-
-function random_state(n_qubits)
-    # Sample uniformly in the sphere
-    ϕ = 2 * rand() * π
-    z = 2 * rand() - 1
-
-    θ = acos(z)
-
-    α = cos(θ / 2)
-    β = exp(im * ϕ) * sin(θ / 2)
-
-    return input_state(n_qubits, α, β)
 end
 
 
@@ -100,9 +52,10 @@ function run_experiment(
     beta      = BETA,
     gamma     = GAMMA,
     times     = TIMES,
+    seed      = nothing,
 )
 
-    if !in(noise_model, ["dephasing", "damping", "bitflip"])
+    if !in(noise_model, ["amplitude_damping", "dephasing", "damping", "bitflip"])
         error("Process not known, try with `dephasing` or `decoherence`!")
     end
 
@@ -118,7 +71,7 @@ function run_experiment(
     states = []
     avg_fs = Dict(t=>0.0 for t in times)
 
-    γ = starting_state(n_qubits, beta)
+    γ = thermal_state(n_qubits, beta)
     ψ0 = zeros(ComplexF64, 2^n_qubits)
     
     for i in ProgressBar(1:n_states)
@@ -126,7 +79,7 @@ function run_experiment(
             ρ0 = deepcopy(γ)
             a=b=-1
         else
-            ψ0 = random_state(n_qubits)
+            ψ0 = random_state(n_qubits, seed=seed)
             ρ0 = ψ0 * ψ0'
         end
         ρ1 = deepcopy(ρ0)
@@ -146,9 +99,11 @@ function run_experiment(
             # Compute fidelity
             f1 = fidelity(ρ0, ρ1)
             f2 = fidelity(ρ0, ρ2)
-
+            
             append!(f1s_sigma, f1)
             append!(f2s_sigma, f2)
+
+            println("Time $t\nFidelity after noise: $f1\nFidelity after recovery: $f2")
             if i!=1
                 avg_fs[t] += overlap(ρ2, ψ0) / (n_states-1)
             end
@@ -184,6 +139,7 @@ function run_experiment(
 
     println("\n=== END ===\n")
     #=savefig(p, "../visualization/$(noise_model)/$(n_qubits)qubits_recovery_in_time_beta$beta.pdf")=#
+    mkpath("../visualization/$noise_model")
     savefig(p, "../visualization/$noise_model/$(n_qubits)qubits_recovery_in_time_beta$beta.png")
 
     
