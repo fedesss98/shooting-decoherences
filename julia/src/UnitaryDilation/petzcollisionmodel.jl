@@ -22,13 +22,16 @@ General constructor. Given arbitrary Kraus operators and a reference state:
 1. Computes the Petz Recovery Kraus operators.
 2. Constructs the Stinespring Collision Unitary U.
 """
-function PetzCollisionModel(kraus_fwd::Vector{Matrix{T1}}, sigma::Matrix{T2}) where {T1<:Number, T2<:Number}
+function PetzCollisionModel(kraus_fwd::Vector{Matrix{T1}}, sigma::Matrix{T2}; n::Int=1) where {T1<:Number, T2<:Number}
     # Determine a common type
     T = promote_type(T1, T2)
     # and convert inputs to this common type
     sigma = Matrix{T}(sigma)
-    kraus_fwd = [Matrix{T}(K) for K in kraus_fwd]
-
+    kraus_fwd = Matrix{T}[Matrix{T}(K) for K in kraus_fwd]
+    # Optionally expand single-qubit Kraus to n-qubits if needed
+    if n > 1
+        expand_kraus_operators!(kraus_fwd, n)
+    end
     d_sys = size(sigma, 1)
     d_anc = length(kraus_fwd) # Ancilla dimension = number of Kraus ops
     
@@ -182,4 +185,70 @@ function PetzCollisionModel(M::Matrix{T}, sigma::Matrix{T}) where T<:Number
     isempty(kraus_fwd) && push!(kraus_fwd, zeros(T, d, d))
     
     PetzCollisionModel(kraus_fwd, sigma)
+end
+
+"""
+    PetzCollisionModel(kraus_single::Vector{Matrix}, sigma::Matrix, N::Int)
+
+Constructor for N-qubit system where single-qubit Kraus operators act independently.
+`kraus_single` are 2×2 Kraus operators acting on each qubit.
+The total system has dimension 2^N × 2^N.
+
+The full Kraus operators are tensor products over all qubits.
+"""
+function PetzCollisionModel(kraus_single::Vector{Matrix{T}}, sigma::Matrix{T}, N::Int) where T<:Number
+    d_single = size(kraus_single[1], 1)
+    @assert d_single == 2 "Single-qubit Kraus operators must be 2×2"
+    @assert size(sigma, 1) == 2^N "Sigma dimension must match 2^N"
+    
+    m = length(kraus_single)
+    
+    # Generate all tensor product combinations
+    # For N qubits with m Kraus ops each: m^N total Kraus operators
+    kraus_fwd = Matrix{T}[]
+    
+    function tensor_product_kraus(indices)
+        K = kraus_single[indices[1]]
+        for i in 2:N
+            K = kron(K, kraus_single[indices[i]])
+        end
+        return K
+    end
+    
+    # All combinations of indices (Cartesian product)
+    for idx in Iterators.product([1:m for _ in 1:N]...)
+        push!(kraus_fwd, tensor_product_kraus(collect(idx)))
+    end
+    
+    PetzCollisionModel(kraus_fwd, sigma)
+end
+
+
+"""
+    expand_kraus_operators!(kraus_single::Vector{Matrix{T}}, N::Int) where T
+
+Expand single-qubit Kraus operators to N-qubit system via tensor products.
+Modifies the input vector in place, replacing it with all m^N tensor product combinations.
+"""
+function expand_kraus_operators!(kraus_single::Vector{Matrix{T}}, N::Int) where T    
+    d_single = size(kraus_single[1], 1)
+    @assert d_single == 2 "Single-qubit Kraus operators must be 2×2"
+    
+    m = length(kraus_single)
+    kraus_expanded = Matrix{T}[]
+    
+    # Generate all tensor product combinations
+    for idx in Iterators.product([1:m for _ in 1:N]...)
+        K = kraus_single[idx[1]]
+        for i in 2:N
+            K = kron(K, kraus_single[idx[i]])
+        end
+        push!(kraus_expanded, K)
+    end
+    
+    # Modify in place
+    empty!(kraus_single)
+    append!(kraus_single, kraus_expanded)
+    
+    return kraus_single
 end
