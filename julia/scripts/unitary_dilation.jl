@@ -434,9 +434,9 @@ function prove_autorecovery(;
 
   ρf = apply_channel(petz_model.kraus_fwd, ρ0)
   # Enforce physicality (hermitianicity and trace 1)
-  enforce_physical!(ρf)
+  # enforce_physical!(ρf)
   ρr, _ = apply_petz_collision(petz_model, ρf)
-  enforce_physical!(ρr)
+  # enforce_physical!(ρr)
   # Compute Fidelity
   println("Fidelity after noise: $(fidelity(ρ0, ρf))")
   println("Fidelity after recovery: $(fidelity(ρ0, ρr))")
@@ -454,9 +454,9 @@ function prove_autorecovery(;
     petz_model = PetzCollisionModel(M_total, ρ0)
 
     ρf = apply_channel(petz_model.kraus_fwd, ρr)
-    enforce_physical!(ρf)
+    # enforce_physical!(ρf)
     ρr, _ = apply_petz_collision(petz_model, ρf)
-    enforce_physical!(ρr)
+    # enforce_physical!(ρr)
     # Compute Fidelity
     println("Fidelity after noise: $(fidelity(ρ0, ρf))")
     println("Fidelity after recovery: $(fidelity(ρ0, ρr))")
