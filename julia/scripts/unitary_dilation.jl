@@ -39,7 +39,8 @@ end
 
 function NoiseObj(noise::String, p::Float64, gamma::Float64, sigma::Matrix{T}, t::Float64) where T
   kraus = get_kraus_operators(noise, gamma, t)
-  model = CollisionModel(kraus, sigma)
+  n_qubits = Int(log2(size(sigma, 1)))
+  model = CollisionModel(kraus, sigma, n=n_qubits)
   M_petz, M_noise = build_superoperators(model)
   return NoiseObj{T}(noise, p, kraus, M_petz, M_noise)
 end
@@ -58,7 +59,11 @@ function get_kraus_operators(noise, gamma, t)
 end
 
 function apply_noise(model, ρ, n_qubits)
-  ρf = apply_channel(model.kraus_fwd, ρ, n_qubits)
+  if size(model.kraus_fwd[1], 1) == 2^n_qubits
+    ρf = apply_channel(model.kraus_fwd, ρ)
+  else
+    ρf = apply_channel(model.kraus_fwd, ρ, n_qubits)  
+  end
   # Enforce physicality (hermitianicity and trace 1)
   # enforce_physical!(ρf)
   return ρf
@@ -120,20 +125,20 @@ function main(;
 
   # 1. REAL Noise is applied to the state
   real_kraus = get_kraus_operators(noise, gamma, dt)
-  real_model = CollisionModel(real_kraus, sigma)
+  real_model = CollisionModel(real_kraus, sigma, n=n_qubits)
   ρf = apply_noise(real_model, ρ0, n_qubits)
   # 2. Take an initial guess for the noise model
   noise_guess = sample(rng, [n[2] for n in noise_models])
   println("\nInitial noise guess: $noise_guess\n")
   kraus_fwd = get_kraus_operators(noise_guess, gamma, dt)
   # 3. Build the Petz Collision Model
-  petz_model = CollisionModel(kraus_fwd, sigma)
+  petz_model = CollisionModel(kraus_fwd, sigma, n=n_qubits)
   # 4. Act: recover the state
   ρr, η = recovery(petz_model, ρf)
   # 5. Compare with possible ancilla outputs
   ancilla_options = []
   for option in noise_options
-    _model = CollisionModel(option.kraus, sigma)
+    _model = CollisionModel(option.kraus, sigma, n=n_qubits)
     _, _η = recovery(_model, ρf)
     push!(ancilla_options, _η)
   end
@@ -184,7 +189,7 @@ function main(;
     # 3. Compare with possible ancilla outputs
     ancilla_options = []
     for option in noise_options
-      _model = CollisionModel(option.kraus, sigma)
+      _model = CollisionModel(option.kraus, sigma, n=n_qubits)
       _, _η = recovery(_model, ρf)
       push!(ancilla_options, _η)
     end
@@ -428,11 +433,11 @@ function prove_autorecovery(;
 
   # Step 1
   # N = Omega_a
-  println("\n-- STEP 1: Noise channel = Ω[σ]")
+  println("\n-- STEP 1: Noise channel ($noise) = Ω[σ]")
   
   petz_model = CollisionModel(kraus_single_qubit, ρ0, n=n_qubits)
 
-  ρf = apply_channel(petz_model.kraus_fwd, ρ0)
+  ρf = apply_channel(petz_model.kraus_fwd, ρ0, n_qubits)
   # Enforce physicality (hermitianicity and trace 1)
   # enforce_physical!(ρf)
   ρr, _ = apply_collision(petz_model, ρf)
