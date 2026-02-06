@@ -39,7 +39,7 @@ end
 
 function NoiseObj(noise::String, p::Float64, gamma::Float64, sigma::Matrix{T}, t::Float64) where T
   kraus = get_kraus_operators(noise, gamma, t)
-  model = PetzCollisionModel(kraus, sigma)
+  model = CollisionModel(kraus, sigma)
   M_petz, M_noise = build_superoperators(model)
   return NoiseObj{T}(noise, p, kraus, M_petz, M_noise)
 end
@@ -60,14 +60,14 @@ end
 function apply_noise(model, ρ, n_qubits)
   ρf = apply_channel(model.kraus_fwd, ρ, n_qubits)
   # Enforce physicality (hermitianicity and trace 1)
-  enforce_physical!(ρf)
+  # enforce_physical!(ρf)
   return ρf
 end
 
 
 function recovery(model, ρ)
-  ρr, η = apply_petz_collision(model, ρ)
-  enforce_physical!(ρr)
+  ρr, η = apply_collision(model, ρ)
+  # enforce_physical!(ρr)
   return ρr, η
 end
 
@@ -120,20 +120,20 @@ function main(;
 
   # 1. REAL Noise is applied to the state
   real_kraus = get_kraus_operators(noise, gamma, dt)
-  real_model = PetzCollisionModel(real_kraus, sigma)
+  real_model = CollisionModel(real_kraus, sigma)
   ρf = apply_noise(real_model, ρ0, n_qubits)
   # 2. Take an initial guess for the noise model
   noise_guess = sample(rng, [n[2] for n in noise_models])
   println("\nInitial noise guess: $noise_guess\n")
   kraus_fwd = get_kraus_operators(noise_guess, gamma, dt)
   # 3. Build the Petz Collision Model
-  petz_model = PetzCollisionModel(kraus_fwd, sigma)
+  petz_model = CollisionModel(kraus_fwd, sigma)
   # 4. Act: recover the state
   ρr, η = recovery(petz_model, ρf)
   # 5. Compare with possible ancilla outputs
   ancilla_options = []
   for option in noise_options
-    _model = PetzCollisionModel(option.kraus, sigma)
+    _model = CollisionModel(option.kraus, sigma)
     _, _η = recovery(_model, ρf)
     push!(ancilla_options, _η)
   end
@@ -160,7 +160,7 @@ function main(;
   M_petz, M_noise = noise_guess.supermap_petz, noise_guess.supermap_noise
   M_total = (M_noise * M_petz) * M_noise
   # 9. Update the Petz Collision Model
-  petz_model = PetzCollisionModel(M_total, sigma)
+  petz_model = CollisionModel(M_total, sigma)
   
   # 10. Compute Fidelity and print results
   fid_noise = fidelity(ρ0, ρf)
@@ -184,7 +184,7 @@ function main(;
     # 3. Compare with possible ancilla outputs
     ancilla_options = []
     for option in noise_options
-      _model = PetzCollisionModel(option.kraus, sigma)
+      _model = CollisionModel(option.kraus, sigma)
       _, _η = recovery(_model, ρf)
       push!(ancilla_options, _η)
     end
@@ -211,7 +211,7 @@ function main(;
     M_petz, M_noise = noise_guess.supermap_petz, noise_guess.supermap_noise
     M_total = ((M_noise * M_petz)^step) * M_noise
     # 7. Update the Petz Collision Model
-    petz_model = PetzCollisionModel(M_total, sigma)
+    petz_model = CollisionModel(M_total, sigma)
 
     # 8. Compute Fidelity and print results
     fid_noise = fidelity(ρ0, ρf)
@@ -264,13 +264,13 @@ function prove_recovery(sigma=nothing;
   # N = Omega_a
   println("\n-- STEP 1: Noise channel = Ω[σ]")
   
-  petz_model = PetzCollisionModel(kraus_fwd, sigma)
+  petz_model = CollisionModel(kraus_fwd, sigma)
 
   ρ1 = apply_channel(petz_model.kraus_fwd, ρ1, n_qubits)
   ρ2 = apply_channel(petz_model.kraus_fwd, ρ2, n_qubits)
   # Enforce physicality (hermitianicity and trace 1)
   # enforce_physical!(ρf)
-  ρ2, _ = apply_petz_collision(petz_model, ρ2)
+  ρ2, _ = apply_collision(petz_model, ρ2)
   # enforce_physical!(ρr)
   # Compute Fidelity
   println("Fidelity after noise: $(fidelity(ρ0, ρ1))")
@@ -286,12 +286,12 @@ function prove_recovery(sigma=nothing;
     # Add the Petz collision and the noise to the total supermap
     M_total = M_noise * M_petz * M_total
     # Update the collision model
-    petz_model = PetzCollisionModel(M_total, sigma)
+    petz_model = CollisionModel(M_total, sigma)
 
     ρ1 = apply_channel(petz_model.kraus_fwd, ρ1, n_qubits)
     ρ2 = apply_channel(petz_model.kraus_fwd, ρ2, n_qubits)
     # enforce_physical!(ρf)
-    ρ2, _ = apply_petz_collision(petz_model, ρ2)
+    ρ2, _ = apply_collision(petz_model, ρ2)
     # enforce_physical!(ρr)
 
     # Compute Fidelity
@@ -352,7 +352,7 @@ function prove_classic_recovery(sigma=nothing;
   # N = Omega_a
   println("\n-- STEP 1: Noise channel = Ω[σ]")
   
-  petz_model = PetzCollisionModel(kraus, sigma)
+  petz_model = CollisionModel(kraus, sigma)
 
   ρ1 = apply_channel(kraus, ρ1, n_qubits)
   ρ2 = apply_channel(kraus, ρ2, n_qubits)
@@ -372,7 +372,7 @@ function prove_classic_recovery(sigma=nothing;
     # Add the Petz collision and the noise to the total supermap
     M_total = M_noise * M_petz * M_total
     # Update the collision model
-    petz_model = PetzCollisionModel(M_total, sigma)
+    petz_model = CollisionModel(M_total, sigma)
     kraus = petz_model.kraus_fwd
 
     ρ1 = apply_channel(kraus, ρ1, n_qubits)
@@ -430,12 +430,12 @@ function prove_autorecovery(;
   # N = Omega_a
   println("\n-- STEP 1: Noise channel = Ω[σ]")
   
-  petz_model = PetzCollisionModel(kraus_single_qubit, ρ0, n=n_qubits)
+  petz_model = CollisionModel(kraus_single_qubit, ρ0, n=n_qubits)
 
   ρf = apply_channel(petz_model.kraus_fwd, ρ0)
   # Enforce physicality (hermitianicity and trace 1)
   # enforce_physical!(ρf)
-  ρr, _ = apply_petz_collision(petz_model, ρf)
+  ρr, _ = apply_collision(petz_model, ρf)
   # enforce_physical!(ρr)
   # Compute Fidelity
   println("Fidelity after noise: $(fidelity(ρ0, ρf))")
@@ -451,11 +451,11 @@ function prove_autorecovery(;
     # Add the Petz collision and the noise to the total supermap
     M_total = M_noise * M_petz * M_total
     # Update the collision model
-    petz_model = PetzCollisionModel(M_total, ρ0)
+    petz_model = CollisionModel(M_total, ρ0)
 
     ρf = apply_channel(petz_model.kraus_fwd, ρr)
     # enforce_physical!(ρf)
-    ρr, _ = apply_petz_collision(petz_model, ρf)
+    ρr, _ = apply_collision(petz_model, ρf)
     # enforce_physical!(ρr)
     # Compute Fidelity
     println("Fidelity after noise: $(fidelity(ρ0, ρf))")

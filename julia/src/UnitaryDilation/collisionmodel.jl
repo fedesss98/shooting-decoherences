@@ -16,7 +16,7 @@ struct CollisionModel{T<:Number}
 end
 
 """
-    CollisionModel(kraus_fwd, sigma)
+    CollisionModel(kraus_fwd, sigma; n=1)
 
 General constructor. Given arbitrary Kraus operators and a reference state:
 1. Computes the Petz Recovery Kraus operators.
@@ -44,58 +44,10 @@ function CollisionModel(kraus_fwd::Vector{Matrix{T1}}, sigma::Matrix{T2}; n::Int
     σ_out_inv_sqrt = inv(sqrt(Hermitian(N_sigma + 1e-10*I)))
     kraus_rec = [σ_sqrt * K' * σ_out_inv_sqrt for K in kraus_fwd]
 
-    # 3. Generate the Collision Unitary U
-    # Total dimension = System ⊗ Ancilla
-    d_tot = d_sys * d_anc
-    
-    # We construct the first d_sys columns of U.
-    # These columns define the action U(ρ ⊗ |0><0|) U'.
-    # Column j corresponds to input state |j>_S ⊗ |0>_E.
-    # Formula: U |j, 0> = ∑_i (R_i |j>) ⊗ |i>_E
-    
-    # Pre-allocate the "known" part of the unitary (V)
-    V = zeros(T, d_tot, d_sys)
-    
-    # System basis vectors
-    sys_basis = [zeros(T, d_sys) for _ in 1:d_sys]
-    for k in 1:d_sys; sys_basis[k][k] = 1.0; end
+    # 3. Construct Stinespring Unitary U
+    U = unitary_dilation(kraus_rec, d_sys, d_anc)
 
-    # Ancilla basis vectors
-    anc_basis = [zeros(T, d_anc) for _ in 1:d_anc]
-    for k in 1:d_anc; anc_basis[k][k] = 1.0; end
-
-    for j in 1:d_sys
-        input_vec = sys_basis[j] # |j>
-        
-        # Calculate the resulting vector in the joint space
-        output_vec_joint = zeros(T, d_tot)
-        
-        for i in 1:d_anc
-            # Apply Recovery operator i to system state j
-            transformed_sys = kraus_rec[i] * input_vec
-            
-            # Tensor product with ancilla state |i>
-            # joint index = (sys_idx - 1) * d_anc + anc_idx (Julia uses Column Major, but kron is standard)
-            # We use Julia's kron: kron(A, B) computes A ⊗ B.
-            # Here we need transformed_sys ⊗ |i>_anc
-            term = kron(transformed_sys, anc_basis[i])
-            output_vec_joint += term
-        end
-        
-        V[:, j] = output_vec_joint
-    end
-
-    # 4. Complete the Unitary
-    # We have V (d_tot x d_sys) which is isometric (V'V = I).
-    # We need to fill the remaining columns to make it square and unitary.
-    # QR decomposition is a numerically stable way to do this.
-    # If A = QR, and A has orthonormal columns, Q's first columns are A.
-    Q_fact = qr(V)
-    # FORCE FULL SQUARE MATRIX:
-    # Multiply Q (which acts like a operator) by the full Identity matrix
-    U_full = Q_fact.Q * Matrix{T}(I, d_tot, d_tot)
-
-    return CollisionModel(d_sys, d_anc, sigma, kraus_fwd, kraus_rec, U_full)
+    return CollisionModel(d_sys, d_anc, sigma, kraus_fwd, kraus_rec, U)
 end
 
 
@@ -183,42 +135,6 @@ function CollisionModel(M::Matrix{T}, sigma::Matrix{T}) where T<:Number
     end
     
     isempty(kraus_fwd) && push!(kraus_fwd, zeros(T, d, d))
-    
-    CollisionModel(kraus_fwd, sigma)
-end
-
-"""
-    CollisionModel(kraus_single::Vector{Matrix}, sigma::Matrix, N::Int)
-
-Constructor for N-qubit system where single-qubit Kraus operators act independently.
-`kraus_single` are 2×2 Kraus operators acting on each qubit.
-The total system has dimension 2^N × 2^N.
-
-The full Kraus operators are tensor products over all qubits.
-"""
-function CollisionModel(kraus_single::Vector{Matrix{T}}, sigma::Matrix{T}, N::Int) where T<:Number
-    d_single = size(kraus_single[1], 1)
-    @assert d_single == 2 "Single-qubit Kraus operators must be 2×2"
-    @assert size(sigma, 1) == 2^N "Sigma dimension must match 2^N"
-    
-    m = length(kraus_single)
-    
-    # Generate all tensor product combinations
-    # For N qubits with m Kraus ops each: m^N total Kraus operators
-    kraus_fwd = Matrix{T}[]
-    
-    function tensor_product_kraus(indices)
-        K = kraus_single[indices[1]]
-        for i in 2:N
-            K = kron(K, kraus_single[indices[i]])
-        end
-        return K
-    end
-    
-    # All combinations of indices (Cartesian product)
-    for idx in Iterators.product([1:m for _ in 1:N]...)
-        push!(kraus_fwd, tensor_product_kraus(collect(idx)))
-    end
     
     CollisionModel(kraus_fwd, sigma)
 end

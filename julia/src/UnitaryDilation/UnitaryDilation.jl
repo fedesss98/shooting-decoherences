@@ -5,10 +5,10 @@ using LinearAlgebra
 export 
 CollisionModel, apply_collision, extract_kraus_operators, partial_traces, unitary_dilation
 
-include("collisionmodel.jl")
+include("unitary_dilation.jl")
 include("extract_kraus.jl")
 include("partial_traces.jl")
-include("unitary_dilation.jl")
+include("collisionmodel.jl")
 
 
 """
