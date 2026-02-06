@@ -1,12 +1,12 @@
 
 """
-    PetzCollisionModel
+    CollisionModel
 
-A struct to organize the simulation of a Petz recovery map via a collision model.
+A struct to organize the simulation of a recovery map via a collision model.
 It stores the system/ancilla dimensions, the reference state, the forward/recovery Kraus ops,
 and the resulting Stinespring dilation Unitary.
 """
-struct PetzCollisionModel{T<:Number}
+struct CollisionModel{T<:Number}
     dim_sys::Int
     dim_anc::Int
     sigma::Matrix{T}              # Reference state
@@ -16,13 +16,13 @@ struct PetzCollisionModel{T<:Number}
 end
 
 """
-    PetzCollisionModel(kraus_fwd, sigma)
+    CollisionModel(kraus_fwd, sigma)
 
 General constructor. Given arbitrary Kraus operators and a reference state:
 1. Computes the Petz Recovery Kraus operators.
 2. Constructs the Stinespring Collision Unitary U.
 """
-function PetzCollisionModel(kraus_fwd::Vector{Matrix{T1}}, sigma::Matrix{T2}; n::Int=1) where {T1<:Number, T2<:Number}
+function CollisionModel(kraus_fwd::Vector{Matrix{T1}}, sigma::Matrix{T2}; n::Int=1) where {T1<:Number, T2<:Number}
     # Determine a common type
     T = promote_type(T1, T2)
     # and convert inputs to this common type
@@ -95,12 +95,12 @@ function PetzCollisionModel(kraus_fwd::Vector{Matrix{T1}}, sigma::Matrix{T2}; n:
     # Multiply Q (which acts like a operator) by the full Identity matrix
     U_full = Q_fact.Q * Matrix{T}(I, d_tot, d_tot)
 
-    return PetzCollisionModel(d_sys, d_anc, sigma, kraus_fwd, kraus_rec, U_full)
+    return CollisionModel(d_sys, d_anc, sigma, kraus_fwd, kraus_rec, U_full)
 end
 
 
 """
-    PetzCollisionModel(noise_channel::Function, gamma, sigma; nsteps=100)
+    CollisionModel(noise_channel::Function, gamma, sigma; nsteps=100)
 
 Constructor for when Kraus operators are unknown. The noise channel is given as
 a function `noise_channel(rho, gamma)` that returns the output state.
@@ -110,7 +110,7 @@ The Petz recovery is constructed by numerical Choi-Jamiolkowski:
 - Compute dΦ/dγ ≈ (Φ(γ+dγ) - Φ(γ))/dγ
 - Extract Kraus operators via eigendecomposition of Choi matrix
 """
-function PetzCollisionModel(noise_channel::Function, gamma::Real, sigma::Matrix{T}; 
+function CollisionModel(noise_channel::Function, gamma::Real, sigma::Matrix{T}; 
                             nsteps::Int=100) where T<:Number
     d = size(sigma, 1)
     
@@ -151,16 +151,16 @@ function PetzCollisionModel(noise_channel::Function, gamma::Real, sigma::Matrix{
     
     isempty(kraus_fwd) && push!(kraus_fwd, zeros(T, d, d))
     
-    PetzCollisionModel(kraus_fwd, sigma)
+    CollisionModel(kraus_fwd, sigma)
 end
 
 """
-    PetzCollisionModel(M::Matrix, sigma::Matrix)
+    CollisionModel(M::Matrix, sigma::Matrix)
 
 Constructor from superoperator M (d²×d² matrix in column-stacking convention).
 Extracts Kraus operators via Choi matrix eigendecomposition.
 """
-function PetzCollisionModel(M::Matrix{T}, sigma::Matrix{T}) where T<:Number
+function CollisionModel(M::Matrix{T}, sigma::Matrix{T}) where T<:Number
     d = size(sigma, 1)
     
     # Choi matrix from superoperator: reshape and transpose
@@ -184,11 +184,11 @@ function PetzCollisionModel(M::Matrix{T}, sigma::Matrix{T}) where T<:Number
     
     isempty(kraus_fwd) && push!(kraus_fwd, zeros(T, d, d))
     
-    PetzCollisionModel(kraus_fwd, sigma)
+    CollisionModel(kraus_fwd, sigma)
 end
 
 """
-    PetzCollisionModel(kraus_single::Vector{Matrix}, sigma::Matrix, N::Int)
+    CollisionModel(kraus_single::Vector{Matrix}, sigma::Matrix, N::Int)
 
 Constructor for N-qubit system where single-qubit Kraus operators act independently.
 `kraus_single` are 2×2 Kraus operators acting on each qubit.
@@ -196,7 +196,7 @@ The total system has dimension 2^N × 2^N.
 
 The full Kraus operators are tensor products over all qubits.
 """
-function PetzCollisionModel(kraus_single::Vector{Matrix{T}}, sigma::Matrix{T}, N::Int) where T<:Number
+function CollisionModel(kraus_single::Vector{Matrix{T}}, sigma::Matrix{T}, N::Int) where T<:Number
     d_single = size(kraus_single[1], 1)
     @assert d_single == 2 "Single-qubit Kraus operators must be 2×2"
     @assert size(sigma, 1) == 2^N "Sigma dimension must match 2^N"
@@ -220,7 +220,7 @@ function PetzCollisionModel(kraus_single::Vector{Matrix{T}}, sigma::Matrix{T}, N
         push!(kraus_fwd, tensor_product_kraus(collect(idx)))
     end
     
-    PetzCollisionModel(kraus_fwd, sigma)
+    CollisionModel(kraus_fwd, sigma)
 end
 
 

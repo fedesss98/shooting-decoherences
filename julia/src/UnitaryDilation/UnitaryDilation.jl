@@ -3,16 +3,16 @@ module UnitaryDilation
 using LinearAlgebra
 
 export 
-PetzCollisionModel, apply_petz_collision, extract_kraus_operators
+CollisionModel, apply_collision, extract_kraus_operators, partial_traces, unitary_dilation
 
-include("petzcollisionmodel.jl")
+include("collisionmodel.jl")
 include("extract_kraus.jl")
 include("partial_traces.jl")
 include("unitary_dilation.jl")
 
 
 """
-    apply_petz_collision(model, rho)
+    apply_collision(model, rho)
 
 Simulates the recovery map by:
 1. Initializing ancilla in |0><0|
