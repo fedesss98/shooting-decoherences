@@ -202,8 +202,6 @@ function enforce_physical!(rho::Matrix{ComplexF64})
     return rho
 end
 
-
-
 function kraus_to_superop(kraus_ops)
     d = size(kraus_ops[1], 1)
     superop = zeros(ComplexF64, d^2, d^2)
@@ -223,4 +221,52 @@ function build_superoperators(model)
   M_noise = kraus_to_superop(model.kraus_fwd)
 
   return M_petz, M_noise
+end
+
+"""
+    discrim(ρ_test, ρ₁, ρ₂)
+
+Performs optimal discrimination between two reference quantum states ρ₁ and ρ₂
+given a test state ρ_test. Returns the probability that ρ_test is state i.
+
+# Arguments
+- `ρ_test`: The test density matrix to discriminate
+- `ρ₁`: First reference density matrix
+- `ρ₂`: First reference density matrix
+
+# Returns
+- `(p₁, p₂)`: Probabilities that the test state is ρ₁ or ρ₂ respectively
+
+# Algorithm
+Uses the Helstrom measurement (optimal POVM for minimum error discrimination):
+- Π₁ = projector onto positive eigenspace of (ρ₁ - ρ₂)
+- Π₂ = I - Π₁
+- Returns pᵢ = Tr(Πᵢ * ρ_test)
+"""
+function discrim(ρ_test, ρ₁, ρ₂)
+    # Compute the difference of density matrices
+    Δρ = ρ₁ - ρ₂
+    
+    # Diagonalize to find eigenvalues and eigenvectors
+    eigen_decomp = eigen(Hermitian(Δρ))
+    eigenvalues = eigen_decomp.values
+    eigenvectors = eigen_decomp.vectors
+    
+    # Construct Π₁: projector onto positive eigenspace
+    Π₁ = zeros(ComplexF64, size(ρ₁))
+    for i in eachindex(eigenvalues)
+        if eigenvalues[i] > 1e-10  # positive eigenvalue (with numerical tolerance)
+            v = eigenvectors[:, i]
+            Π₁ += v * v'  # Add rank-1 projector |v⟩⟨v|
+        end
+    end
+    
+    # Construct Π₂: complement projector
+    Π₂ = I - Π₁
+    
+    # Compute probabilities
+    p₁ = real(tr(Π₁ * ρ_test))
+    p₂ = real(tr(Π₂ * ρ_test))
+    
+    return (p₁, p₂)
 end
