@@ -3,6 +3,25 @@ const Z  = [1.0+0.0im 0.0; 0.0 -1.0]
 const X  = [0.0im 1.0; 1.0 0.0]
 
 
+"""
+    kraus_depolarizing(p::Float64)
+
+Returns Kraus operators for the depolarizing channel.
+"""
+function get_depolarizing_operators(gamma, t)
+    p = 1 - exp(-gamma * t)
+    # Probability of no error
+    p_i = 1 - p
+    # Probability of each specific Pauli error (X, Y, Z)
+    p_err = p / 3.0
+    
+    K0 = sqrt(p_i) * [1.0 0.0; 0.0 1.0]
+    K1 = sqrt(p_err) * [0.0 1.0; 1.0 0.0]        # X
+    K2 = sqrt(p_err) * [0.0 -im; im 0.0]         # Y
+    K3 = sqrt(p_err) * [1.0 0.0; 0.0 -1.0]       # Z
+    
+    return [K0, K1, K2, K3]
+end
 
 
 """
