@@ -51,11 +51,11 @@ function update_noise_history!(noise_obj)
   noise_obj.supermap = M_noise * M_petz * noise_obj.supermap
 end
 
-function measure_ancilla(η, rho, noise_options, sigma, n_qubits)
+function measure_ancilla(η, rho, noise_options, sigma, rng)
   ancilla_options = []
   for option in noise_options
     _model = CollisionModel(option.supermap, sigma)
-    _, _η = recovery(_model, rho)
+    _, _η = apply_collision(_model, rho)
     push!(ancilla_options, _η)
   end
 
@@ -95,29 +95,32 @@ function step_recovery!(step::Int, state::RecoveryState, config::RecoveryConfig,
     model = CollisionModel(state.M_total, config.sigma)
     
     # 1. Apply noise (update rho1 and create intermediate rho2_)
-    state.rho1 = apply_channel(config.real_noise.kraus, state.rho1, config.n_qubits)
-    rho2_noisy = apply_channel(config.real_noise.kraus, state.rho2, config.n_qubits)
+    state.ρ_free = apply_channel(config.real_noise.kraus, state.ρ_free, config.n_qubits)
+    ρ_rec_ = apply_channel(config.real_noise.kraus, state.ρ_rec, config.n_qubits)
     
     # 2. Recovery
     # Update rho2 in the state struct
-    state.rho2, η = recovery(model, rho2_noisy)
+    state.ρ_rec, η = apply_collision(model, ρ_rec_)
     
     # 3. Logging
-    fid_initial = fidelity(state.ρ0, state.rho2)
-    fid_ref = fidelity(config.sigma, state.rho2)
-    fid_track = fidelity(state.ρ0, state.rho1)
+    fid_initial = fidelity(state.ρ0, state.ρ_rec)
+    fid_ref = fidelity(config.sigma, state.ρ_rec)
+    fid_track = fidelity(state.ρ0, state.ρ_free)
 
     @debug "Fidelity wrt initial state: $fid_initial"
     @debug "Fidelity wrt reference state: $fid_ref"
+    @debug "Fidelity of free evolution: $fid_track"
     
     push!(logs.ref_fidelities, fid_track)
     push!(logs.fidelities, fid_initial)
     
     # 4. Measure Ancilla and Update Guess
-    for option in state.noise_options
-        update_noise_history!(option)
+    if step > 1
+        for option in state.noise_options
+            update_noise_history!(option)
+        end
     end
-    povm = measure_ancilla(η, rho2_noisy, state.noise_options, config.sigma, config.n_qubits)
+    povm = measure_ancilla(η, ρ_rec_, state.noise_options, config.sigma, config.rng)
     @debug "Measure output: $povm"
     
     # Update the remaining state variables
