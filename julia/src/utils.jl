@@ -223,50 +223,20 @@ function build_superoperators(model)
   return M_petz, M_noise
 end
 
+
 """
-    discrim(ρ_test, ρ₁, ρ₂)
+  get_kraus_operators(noise, gamma, t)
 
-Performs optimal discrimination between two reference quantum states ρ₁ and ρ₂
-given a test state ρ_test. Returns the probability that ρ_test is state i.
-
-# Arguments
-- `ρ_test`: The test density matrix to discriminate
-- `ρ₁`: First reference density matrix
-- `ρ₂`: First reference density matrix
-
-# Returns
-- `(p₁, p₂)`: Probabilities that the test state is ρ₁ or ρ₂ respectively
-
-# Algorithm
-Uses the Helstrom measurement (optimal POVM for minimum error discrimination):
-- Π₁ = projector onto positive eigenspace of (ρ₁ - ρ₂)
-- Π₂ = I - Π₁
-- Returns pᵢ = Tr(Πᵢ * ρ_test)
 """
-function discrim(ρ_test, ρ₁, ρ₂)
-    # Compute the difference of density matrices
-    Δρ = ρ₁ - ρ₂
-    
-    # Diagonalize to find eigenvalues and eigenvectors
-    eigen_decomp = eigen(Hermitian(Δρ))
-    eigenvalues = eigen_decomp.values
-    eigenvectors = eigen_decomp.vectors
-    
-    # Construct Π₁: projector onto positive eigenspace
-    Π₁ = zeros(ComplexF64, size(ρ₁))
-    for i in eachindex(eigenvalues)
-        if eigenvalues[i] > 1e-10  # positive eigenvalue (with numerical tolerance)
-            v = eigenvectors[:, i]
-            Π₁ += v * v'  # Add rank-1 projector |v⟩⟨v|
-        end
-    end
-    
-    # Construct Π₂: complement projector
-    Π₂ = I - Π₁
-    
-    # Compute probabilities
-    p₁ = real(tr(Π₁ * ρ_test))
-    p₂ = real(tr(Π₂ * ρ_test))
-    
-    return (p₁, p₂)
+function get_kraus_operators(noise, gamma, t)
+  if noise == "amplitude_damping"
+    return get_amplitudedamping_operators(gamma, t)
+  elseif noise == "dephasing"
+    return get_dephasing_operators(gamma, t)
+  elseif noise == "bitflip"
+    return get_bitflip_operators(gamma, t)
+  else
+    error("Unknown noise model: $noise")
+  end
+
 end
