@@ -4,7 +4,7 @@ using ProgressMeter
 
 export 
 PetzMaps,
-get_dephasing_operators, get_amplitudedamping_operators, get_bitflip_operators, 
+get_kraus_operators, 
 # initial configuration objects
 load_configuration, RecoveryConfig, RecoveryState, RecoveryLogs, NoiseObj,
 # initial states
@@ -14,7 +14,9 @@ apply_channel, recovery_map,
 fidelity, overlap,
 
 UnitaryDilation,
-PetzCollisionModel, apply_petz_collision, extract_kraus_operators
+CollisionModel, apply_collision, extract_kraus_operators,
+# main function
+run_experiment, discrimin, update_noise_history!, measure_ancilla, update_noise_guess, step_recovery!
 
 
 include("PetzMaps.jl")
@@ -51,21 +53,26 @@ function run_experiment(config_file="./configs/config.toml")
 
         # Setup the progress bar for one state evolution
         p_time = Progress(
-            cfg.n_timesteps, desc=" State $s ", offset=1, keep=false)
+            cfg.n_timesteps, desc=" State $s ", offset=1)
 
-        for _ in 1:cfg.n_timesteps
-            step_recovery!(initial_state, cfg, logs)
+        for step in 1:cfg.n_timesteps
+            step_recovery!(step, initial_state, cfg, logs)
             
             next!(p_time; showvalues=[
                 ("Fidelity", logs.fidelities[end]),
                 ("Reference", logs.ref_fidelities[end])
             ])
         end
-        ref_fidelities .+= logs.ref_fidelities
-        fidelities .+= logs.fidelities
+        finish!(p_time)
+        start_state_results = (s - 1) * cfg.n_timesteps + 1
+        end_state_results = s * cfg.n_timesteps
+
+        ref_fidelities .+= logs.ref_fidelities[start_state_results:end_state_results]
+        fidelities .+= logs.fidelities[start_state_results:end_state_results]
         next!(p_states)
     end
-
+    avg_fidelities = ref_fidelities ./ cfg.n_states, fidelities ./ cfg.n_states
+    return state, cfg, logs, avg_fidelities
 end
 
 
