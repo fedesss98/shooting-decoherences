@@ -28,6 +28,7 @@ struct RecoveryConfig{T<:Number}
     n_timesteps::Int
     n_states::Int
     seed::Int
+    rng::AbstractRNG
 end
 
 # Dynamic State: Updates every iteration
@@ -65,19 +66,34 @@ function load_configuration(config_file="./configs/config.toml")
     n_timesteps = get(cfg, "n_timesteps", 10)
     seed = get(cfg, "seed", 42)
     recovery_type = get(cfg, "type", "auto")
+    starting_state = get(cfg, "starting_state", "thermal")
     n_states = get(cfg, "n_states", 1)
 
     c1 = c2 = 0
 
     # Create the reference state for the recovery
-    sigma = thermal_state(n_qubits, beta)
+    if starting_state == "thermal"
+        sigma = thermal_state(n_qubits, beta)
+    elseif starting_state == "random"
+        ψ = random_state(n_qubits; seed=seed)
+        sigma = ψ * ψ'
+    else
+        error("Unsupported starting state: $starting_state")
+    end
+
+    if recovery_type == "iterative"
+        ψ = random_state(n_qubits; seed=seed)
+        ρ0 = ψ * ψ'
+    elseif recovery_type == "auto"
+        ρ0 = copy(sigma)
+    end
 
     # Generate the possible noises and precompute their operators
     default_noises = [
         (0.60, "bitflip"),
         (0.40, "dephasing"),
     ]
-    noise_probabilities = get(cfg, "noise-probabilities", default_noises)
+    noise_probabilities = get(cfg, "noise_probabilities", default_noises)
     noise_options = [
         NoiseObj(noise_model[2], noise_model[1], sigma, gamma, dt)
         for noise_model in noise_probabilities
@@ -102,15 +118,11 @@ function load_configuration(config_file="./configs/config.toml")
         n_qubits, 
         n_timesteps, 
         n_states, 
-        seed
+        seed,
+        rng
     )
 
-    if recovery_type == "random" || recovery_type == "fixed-random"
-        ψ0 = random_state(n_qubits; seed=seed)
-        ρ0 = ψ0 * ψ0'
-    elseif recovery_type == "auto"
-        ρ0 = copy(sigma)
-    end
+    
     M_petz, M_noise = noise_guess.supermap_petz, noise_guess.supermap_noise
     M_total = M_noise
 
