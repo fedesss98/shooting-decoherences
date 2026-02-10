@@ -6,17 +6,25 @@
 # dt: Time step for the evolution (default: 0.1)
 # n_timesteps: Number of time steps to evolve (default: 10)
 # n_states: Number of different initial states to test (default: 5)
+# reference_state: Type of reference state (default: "thermal"):
+#   - "thermal": Use a thermal state at inverse temperature beta
+#   - "random": Use a random state in the codespace a|00...0> + b|11...1>
 # recovery_type: Type of recovery experiment (default: "auto"):
-#   - "random": Use random initial states for each run
-#   - "fixed-random": Use a random fixed initial state for all runs
+#   - "iterative": Use random initial states for each run
 #   - "auto": Use the reference state itself as initial state
 # seed: Random seed for reproducibility (default: 42)
 
 n_qubits        = 1
 beta            = 2.0
 gamma           = 1.0
-dt              = 0.1
-n_timesteps     = 10
-n_states        = 5
-recovery_type   = "random"
+dt              = 1.0
+n_timesteps     = 20
+n_states        = 30
+starting_state  = "random"
+recovery_type   = "auto"
 seed            = 42
+noise_probabilities = [
+    [0.6, "bitflip"],
+    # [0.2, "amplitude_damping"],
+    [0.4, "dephasing"]
+]
