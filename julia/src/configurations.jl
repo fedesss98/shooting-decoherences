@@ -117,7 +117,7 @@ function load_configuration(config_file="./configs/config.toml")
     choice = sample(rng, [1, 2])
     c1_count = c2_count = 0
     if choice == 1
-        c1 = [1]; c2 = [2]
+        c1 = [1]; c2 = [0]
         c1_count = 1
     elseif choice == 2
         c1 = [0]; c2 = [1]
