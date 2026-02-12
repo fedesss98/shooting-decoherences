@@ -72,7 +72,7 @@ function run_experiment(config_file="./configs/config.toml")
         next!(p_states)
     end
     avg_fidelities = ref_fidelities ./ cfg.n_states, fidelities ./ cfg.n_states
-    return state, cfg, logs, avg_fidelities
+    return cfg, state, logs, avg_fidelities
 end
 
 
