@@ -44,11 +44,10 @@ end
     get_dephasing_operators(gamma, t)
 """
 function get_dephasing_operators(gamma, t)
-    e = exp(-gamma*t)
-    p = (1.0 - e) / 2.0
+    p = (1.0 - exp(-gamma*t)) / 2.0
 
     k1 = sqrt(1.0 - p) * I2
-    k2 = sqrt(p) * X
+    k2 = sqrt(p) * Z
     
     return [k1, k2]
 end
@@ -57,8 +56,7 @@ end
     get_bitflip_operators(gamma, t)
 """
 function get_bitflip_operators(gamma, t)
-    e = exp(-2*gamma*t)
-    p = (1.0 - e) / 2.0
+    p = (1.0 - exp(-gamma*t)) / 2.0
 
     k1 = sqrt(1.0 - p) * I2
     k2 = sqrt(p) * X
