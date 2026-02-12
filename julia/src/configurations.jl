@@ -87,7 +87,7 @@ function load_configuration(config_file="./configs/config.toml")
     end
 
     if recovery_type == "iterative"
-        ψ = random_state(n_qubits; seed=seed)
+        ψ = random_state(n_qubits)
         ρ0 = ψ * ψ'
     elseif recovery_type == "auto"
         ρ0 = copy(sigma)
