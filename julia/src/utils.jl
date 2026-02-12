@@ -226,7 +226,8 @@ end
 
 """
   get_kraus_operators(noise, gamma, t)
-
+Route to the correct Kraus operators given the name of the noise.
+The output is a List of Kraus operators.
 """
 function get_kraus_operators(noise, gamma, t)
   if noise == "amplitude_damping"
@@ -239,4 +240,10 @@ function get_kraus_operators(noise, gamma, t)
     error("Unknown noise model: $noise")
   end
 
+end
+
+function unvec(state)
+  dims = Int(sqrt(size(state, 1)))
+
+  return reshape(state, dims, dims)
 end
