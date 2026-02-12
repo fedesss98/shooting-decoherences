@@ -31,6 +31,14 @@ struct RecoveryConfig{T<:Number}
     rng::AbstractRNG
 end
 
+mutable struct ChoiceSystem
+    c1::Vector{Int}
+    c2::Vector{Int}
+    c1_count::Int
+    c2_count::Int
+    current::Int
+end
+
 # Dynamic State: Updates every iteration
 mutable struct RecoveryState{T<:Number}
     ρ0::Matrix{T}
@@ -38,8 +46,7 @@ mutable struct RecoveryState{T<:Number}
     ρ_rec::Matrix{T}
     noise_guess::NoiseObj
     M_total::Matrix{T}
-    c1::Int
-    c2::Int
+    choice::ChoiceSystem
     noise_options::Vector{NoiseObj{T}}
 end
 
@@ -68,8 +75,6 @@ function load_configuration(config_file="./configs/config.toml")
     recovery_type = get(cfg, "type", "auto")
     starting_state = get(cfg, "starting_state", "thermal")
     n_states = get(cfg, "n_states", 1)
-
-    c1 = c2 = 0
 
     # Create the reference state for the recovery
     if starting_state == "thermal"
@@ -109,7 +114,17 @@ function load_configuration(config_file="./configs/config.toml")
     real_noise = NoiseObj(real_noise, 1.0, sigma, gamma, dt)
 
     # Take an initial guess for the noise model
-    noise_guess = sample(rng, [n for n in noise_options])
+    choice = sample(rng, [1, 2])
+    c1_count = c2_count = 0
+    if choice == 1
+        c1 = [1]; c2 = [2]
+        c1_count = 1
+    elseif choice == 2
+        c1 = [0]; c2 = [1]
+        c2_count = 1
+    end
+    noise_guess = deepcopy(noise_options[choice])
+    choice = ChoiceSystem(c1, c2, c1_count, c2_count, choice)
 
     recovery_cfg = RecoveryConfig(
         sigma, 
@@ -132,7 +147,7 @@ function load_configuration(config_file="./configs/config.toml")
        copy(ρ0),
        noise_guess, 
        M_total, 
-       c1, c2, 
+       choice,
        noise_options
     )
 
