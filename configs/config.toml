@@ -13,18 +13,20 @@
 #   - "iterative": Use random initial states for each run
 #   - "auto": Use the reference state itself as initial state
 # seed: Random seed for reproducibility (default: 42)
+# noise_probabilities: List of noise channels and their probabilities (default: empty list):
+#   - Each entry should be a tuple of the form (probability, noise_type, gamma)
 
-n_qubits        = 1
+n_qubits        = 2
 beta            = 2.0
-gamma           = 1.0
-dt              = 1.0
+# gamma1           = 1.0
+dt              = 0.2
 n_timesteps     = 20
 n_states        = 30
 starting_state  = "random"
 recovery_type   = "auto"
 seed            = 42
 noise_probabilities = [
-    [0.6, "bitflip"],
+    [0.5, "bitflip", 1.0],
     # [0.2, "amplitude_damping"],
-    [0.4, "dephasing"]
+    [0.5, "dephasing", 2.0]
 ]

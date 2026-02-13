@@ -72,7 +72,7 @@ function load_configuration(config_file="./configs/config.toml")
     dt = get(cfg, "dt", 0.1)
     n_timesteps = get(cfg, "n_timesteps", 10)
     seed = get(cfg, "seed", 42)
-    recovery_type = get(cfg, "type", "auto")
+    recovery_type = get(cfg, "recovery_type", "auto")
     starting_state = get(cfg, "starting_state", "thermal")
     n_states = get(cfg, "n_states", 1)
 
@@ -100,18 +100,17 @@ function load_configuration(config_file="./configs/config.toml")
     ]
     noise_probabilities = get(cfg, "noise_probabilities", default_noises)
     noise_options = [
-        NoiseObj(noise_model[2], noise_model[1], sigma, gamma, dt)
+        NoiseObj(noise_model[2], noise_model[1], sigma, noise_model[3], dt)
         for noise_model in noise_probabilities
     ]
     # Initialize Random Number Generator with the seed
     rng = Xoshiro(seed)
 
     # Choose randomly a noise model
-    real_noise = sample(rng,
-        [n[2] for n in noise_probabilities], 
-        Weights([n[1] for n in noise_probabilities])
-    )
-    real_noise = NoiseObj(real_noise, 1.0, sigma, gamma, dt)
+    real_noise = deepcopy(sample(rng,
+        [n for n in noise_options], 
+        Weights([n.probability for n in noise_options])
+    ))
 
     # Take an initial guess for the noise model
     choice = sample(rng, [1, 2])
