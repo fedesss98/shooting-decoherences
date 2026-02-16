@@ -1,5 +1,7 @@
 visualization/
 *.png
+.vscode/
+config_bb84.toml
 
 # ============================================ #
 # Python defaults

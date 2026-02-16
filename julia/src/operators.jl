@@ -4,33 +4,24 @@ const X  = [0.0im 1.0; 1.0 0.0]
 
 
 """
-    density_matrix(a)
+    kraus_depolarizing(p::Float64)
 
-a ∈ [-1, 1]
-|ψ> = a|0⟩ + √(1-a²)|1⟩
+Returns Kraus operators for the depolarizing channel.
 """
-function density_matrix(a)
-    v = [a, sqrt(1 - a^2)]
-    return v * v'
+function get_depolarizing_operators(gamma, t)
+    p = 1 - exp(-gamma * t)
+    # Probability of no error
+    p_i = 1 - p
+    # Probability of each specific Pauli error (X, Y, Z)
+    p_err = p / 3.0
+    
+    K0 = sqrt(p_i) * [1.0 0.0; 0.0 1.0]
+    K1 = sqrt(p_err) * [0.0 1.0; 1.0 0.0]        # X
+    K2 = sqrt(p_err) * [0.0 -im; im 0.0]         # Y
+    K3 = sqrt(p_err) * [1.0 0.0; 0.0 -1.0]       # Z
+    
+    return [K0, K1, K2, K3]
 end
-
-"""
-    codespace_state(n_qubits, a, b)
-
-Create a logic qubit a|00...0> + b|11...1>,
-where we adopt the convention that |00...0> is at index 1
-of the 2^n_qubits state vector and |11...1> is at index n_qubits
-"""
-function codespace_state(n_qubits, a, b, c, d)
-    psi = zeros(ComplexF64, 2^n_qubits)
-    psi[1] = a
-    psi[2] = c
-    psi[4] = d
-    psi[end] = b
-    psi = normalize(psi)
-    return psi * psi'
-end
-
 
 
 """
@@ -53,11 +44,10 @@ end
     get_dephasing_operators(gamma, t)
 """
 function get_dephasing_operators(gamma, t)
-    e = exp(-gamma*t)
-    p = (1.0 - e) / 2.0
+    p = (1.0 - exp(-gamma*t)) / 2.0
 
     k1 = sqrt(1.0 - p) * I2
-    k2 = sqrt(p) * X
+    k2 = sqrt(p) * Z
     
     return [k1, k2]
 end
@@ -66,8 +56,7 @@ end
     get_bitflip_operators(gamma, t)
 """
 function get_bitflip_operators(gamma, t)
-    e = exp(-2*gamma*t)
-    p = (1.0 - e) / 2.0
+    p = (1.0 - exp(-gamma*t)) / 2.0
 
     k1 = sqrt(1.0 - p) * I2
     k2 = sqrt(p) * X
@@ -88,6 +77,10 @@ Applies the amplitude damping channel for all n qubits in the system sequentiall
 """
 function apply_channel(kraus, ρ, n_qubits::Int)
     ρi = copy(ρ)
+    
+    if n_qubits == 1
+        return apply_channel(kraus, ρ)
+    end
 
     for qubit in 1:n_qubits
         ρf = zeros(ComplexF64, size(ρ))
@@ -125,7 +118,7 @@ function partial_recovery_function(kraus, σ, n_qubits)
 end
 
 """
-    recovery_map(gamma, t, σ, ρ)
+    recovery_map(kraus, σ, ρ)
 Returns the recovery map as a function of the new state to be recovered only
 """
 function recovery_map(kraus, σ, ρ)
@@ -164,7 +157,7 @@ as `Matrix{ComplexF64}`, such that
 
 for all ρ in the d-dimensional system.
 """
-function get_kraus_from_map(E::Function, d::Int; tol=1e-10)
+function get_kraus_from_map(E::Function; d::Int, tol=1e-10)
     # Build Choi matrix J of size d^2 × d^2
     J = zeros(ComplexF64, d^2, d^2)
 
@@ -191,7 +184,7 @@ function get_kraus_from_map(E::Function, d::Int; tol=1e-10)
     evals, evecs = eigen(Hermitian(J))
 
     kraus = Matrix{ComplexF64}[]
-    for k in 1:length(evals)
+    for k in eachindex(evals)
         λ = evals[k]
         if λ > tol
             v = evecs[:, k]              # length d^2

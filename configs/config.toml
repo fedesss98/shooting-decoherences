@@ -1,24 +1,32 @@
-# BB84 Experiment Configuration
+# Configurations for the adaptive recovery protocol
+# PARAMETERS
+# n_qubits: Number of qubits in the system (default: 1)
+# beta: Inverse temperature for the reference state (default: 2.0)
+# gamma: Coupling strength (default: 1.0)
+# dt: Time step for the evolution (default: 0.1)
+# n_timesteps: Number of time steps to evolve (default: 10)
+# n_states: Number of different initial states to test (default: 5)
+# reference_state: Type of reference state (default: "thermal"):
+#   - "thermal": Use a thermal state at inverse temperature beta
+#   - "random": Use a random state in the codespace a|00...0> + b|11...1>
+# recovery_type: Type of recovery experiment (default: "auto"):
+#   - "iterative": Use random initial states for each run
+#   - "auto": Use the reference state itself as initial state
+# seed: Random seed for reproducibility (default: 42)
+# noise_probabilities: List of noise channels and their probabilities (default: empty list):
+#   - Each entry should be a tuple of the form (probability, noise_type, gamma)
 
-experiment = "test01"
-
-[general]
-n_qubits = 20
-shots = 1000
-# Options: "automatic", "statevector", "density_matrix", "matrix_product_state"
-sim_method = "automatic"
-seed = 42  # For stochastic measurements
-eave_check = 5
-
-[alice]
-# Use efficient encoding?
-basis_strategy = "random" 
-
-[bob]
-# 0 = passive, 1 = active
-detection_mode = 0
-
-[noise]
-enabled = true
-# Probability that a qubit gets corrupted
-depolarizing_prob = 0.25
+n_qubits        = 2
+beta            = 2.0
+# gamma1           = 1.0
+dt              = 0.2
+n_timesteps     = 20
+n_states        = 30
+starting_state  = "random"
+recovery_type   = "auto"
+seed            = 42
+noise_probabilities = [
+    [0.5, "bitflip", 1.0],
+    # [0.2, "amplitude_damping"],
+    [0.5, "dephasing", 2.0]
+]
