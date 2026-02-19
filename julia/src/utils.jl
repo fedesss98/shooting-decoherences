@@ -232,6 +232,8 @@ The output is a List of Kraus operators.
 function get_kraus_operators(noise, gamma, t)
   if noise == "amplitude_damping"
     return get_amplitudedamping_operators(gamma, t)
+  elseif noise == "phase_damping"
+    return get_phasedamping_operators(gamma, t)
   elseif noise == "dephasing"
     return get_dephasing_operators(gamma, t)
   elseif noise == "bitflip"
