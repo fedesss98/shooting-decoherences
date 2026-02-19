@@ -3,26 +3,26 @@ using Random
 using StatsBase
 
 # Operators relative to the noise
-mutable struct NoiseObj{T<:Number}
+mutable struct NoiseObj
   name::String
   probability::Float64
-  kraus::Vector{Matrix{T}}
-  supermap_petz::Matrix{T}
-  supermap_noise::Matrix{T}
-  supermap::Matrix{T}
+  kraus::Vector{Matrix{ComplexF64}}
+  supermap_petz::Matrix{ComplexF64}
+  supermap_noise::Matrix{ComplexF64}
+  supermap::Matrix{ComplexF64}
 end
 function NoiseObj(noise::String, p::Float64, sigma::Matrix{T}, gamma::Float64, t::Float64) where T
   kraus = get_kraus_operators(noise, gamma, t)
   n_qubits = Int(log2(size(sigma, 1)))
   model = CollisionModel(kraus, sigma, n=n_qubits)
   M_petz, M_noise = build_superoperators(model)
-  return NoiseObj{T}(noise, p, kraus, M_petz, M_noise, M_noise)
+  return NoiseObj(noise, p, kraus, M_petz, M_noise, M_noise)
 end
 
 # Static Configuration for the setup of the algorithm
-struct RecoveryConfig{T<:Number}
+struct RecoveryConfig
     name::String
-    sigma::Matrix{T}
+    sigma::Matrix{ComplexF64}
     recovery_type::String
     real_noise::NoiseObj
     n_qubits::Int
@@ -30,6 +30,7 @@ struct RecoveryConfig{T<:Number}
     n_states::Int
     seed::Int
     rng::AbstractRNG
+    dt::Float64
 end
 
 mutable struct ChoiceSystem
@@ -42,14 +43,14 @@ mutable struct ChoiceSystem
 end
 
 # Dynamic State: Updates every iteration
-mutable struct RecoveryState{T<:Number}
-    ρ0::Matrix{T}
-    ρ_free::Matrix{T}
-    ρ_rec::Matrix{T}
+mutable struct RecoveryState
+    ρ0::Matrix{ComplexF64}
+    ρ_free::Matrix{ComplexF64}
+    ρ_rec::Matrix{ComplexF64}
     noise_guess::NoiseObj
-    M_total::Matrix{T}
+    M_total::Matrix{ComplexF64}
     choice::ChoiceSystem
-    noise_options::Vector{NoiseObj{T}}
+    noise_options::Vector{NoiseObj}
 end
 
 # Logs for tracking evolution of metrics
@@ -60,119 +61,124 @@ end
 # Constructor to initialize empty logs
 RecoveryLogs() = RecoveryLogs(Float64[], Float64[])
 
-
 """
     load_configuration(config_file)
-Reads a TOML configuration file to initialize the setup of the algorithm
+
+Reads a TOML configuration file and initializes all components needed
+to run the recovery algorithm: configuration, initial state, and logs.
 """
 function load_configuration(config_file="./configs/config.toml")
     cfg = TOML.parsefile(config_file)
+    recovery_cfg  = parse_recovery_config(cfg)
+    noise_options  = parse_noise_options(cfg, recovery_cfg.sigma, recovery_cfg.dt)
+    recovery_state = initialize_recovery_state(recovery_cfg, noise_options)
+    return recovery_cfg, recovery_state, RecoveryLogs()
+end
 
-    name = get(cfg, "name", "test")
-    # Get to the root folder
-    root_dir = dirname(pkgdir(DecoKiller))
+# Helper function to create RNG from seed, allowing for reproducibility or randomness
+make_rng(seed) = seed == -1 ? Random.default_rng() : Xoshiro(seed)
+
+
+function parse_recovery_config(cfg::Dict)::RecoveryConfig
+    name          = get(cfg, "name",          "test")
+    n_qubits      = get(cfg, "n_qubits",      1)
+    beta          = get(cfg, "beta",          2.0)
+    dt            = get(cfg, "dt",            0.1)
+    n_timesteps   = get(cfg, "n_timesteps",   10)
+    n_states      = get(cfg, "n_states",      1)
+    seed          = get(cfg, "seed",          42)
+    recovery_type = get(cfg, "recovery_type", "auto")
+    starting_state = get(cfg, "starting_state", "thermal")
+
+    rng           = make_rng(seed)
+    experiment_dir = setup_experiment_dir(name, cfg)
+    setup_logger(joinpath(experiment_dir, "debug.log"))
+
+    sigma         = make_reference_state(starting_state, n_qubits, beta, rng)
+    noise_options = parse_noise_options(cfg, sigma, dt)
+    real_noise    = get(cfg, "real_noise", sample_real_noise(rng, noise_options))
+
+    return RecoveryConfig(
+        name, sigma, recovery_type, real_noise,
+        n_qubits, n_timesteps, n_states, seed, rng, dt
+    )
+end
+
+
+function setup_experiment_dir(name::String, cfg::Dict)::String
+    root_dir       = dirname(dirname(@__DIR__))
     experiment_dir = joinpath(root_dir, "experiments", name)
-    mkpath(experiment_dir)
+
     mkpath(joinpath(experiment_dir, "logs"))
     mkpath(joinpath(experiment_dir, "visualization"))
-    # Save a copy of the config file in the experiment folder for reproducibility
+
     open(joinpath(experiment_dir, "config.toml"), "w") do io
         TOML.print(io, cfg)
     end
-    # Setup log file path
-    log_file = joinpath(experiment_dir, "debug.log")
-    setup_logger(log_file)
 
-    n_qubits = get(cfg, "n_qubits", 1)
-    beta = get(cfg, "beta", 2.0)
-    gamma = get(cfg, "gamma", 1.0)
-    dt = get(cfg, "dt", 0.1)
-    n_timesteps = get(cfg, "n_timesteps", 10)
-    seed = get(cfg, "seed", 42)
-    recovery_type = get(cfg, "recovery_type", "auto")
-    starting_state = get(cfg, "starting_state", "thermal")
-    n_states = get(cfg, "n_states", 1)
+    return experiment_dir
+end
 
-    # Initialize Random Number Generator with the seed
-    rng = seed == -1 ? Random.default_rng() : Xoshiro(seed)
-
-    # Create the reference state for the recovery
-    if starting_state == "thermal"
-        sigma = thermal_state(n_qubits, beta)
-    elseif starting_state == "random"
-        # Generate a random spectrum of eigenvalues between 0.1 and 0.9
+function make_reference_state(kind::String, n_qubits::Int, beta::Float64, rng)
+    if kind == "thermal"
+        return thermal_state(n_qubits, beta)
+    elseif kind == "random"
         spectrum = 0.1 .+ 0.9 .* rand(rng, 2^n_qubits)
-        sigma = rand_state_with_spectrum(spectrum; rng=rng)
+        return rand_state_with_spectrum(spectrum; rng=rng)
     else
-        error("Unsupported starting state: $starting_state")
+        throw(ArgumentError("Unsupported starting state: $kind"))
     end
+end
 
-    if recovery_type == "iterative"
-        ψ = random_state(n_qubits)
-        ρ0 = ψ * ψ'
-    elseif recovery_type == "auto"
-        ρ0 = copy(sigma)
-    end
+const DEFAULT_NOISE_OPTIONS = [
+    (0.60, "bitflip",   1.0),
+    (0.40, "dephasing", 1.0),
+]
 
-    # Generate the possible noises and precompute their operators
-    default_noises = [
-        (0.60, "bitflip"),
-        (0.40, "dephasing"),
-    ]
-    noise_probabilities = get(cfg, "noise_probabilities", default_noises)
-    noise_options = [
-        NoiseObj(noise_model[2], noise_model[1], sigma, noise_model[3], dt)
-        for noise_model in noise_probabilities
-    ]
-    
+function parse_noise_options(cfg::Dict, sigma, dt::Float64)::Vector{NoiseObj}
+    raw = get(cfg, "noise_options", DEFAULT_NOISE_OPTIONS)
+    return [NoiseObj(name, prob, sigma, gamma, dt)
+            for (prob, name, gamma) in raw]
+end
 
-    # Choose randomly a noise model
-    real_noise = deepcopy(sample(rng,
-        [n for n in noise_options], 
-        Weights([n.probability for n in noise_options])
-    ))
+function sample_real_noise(rng, noise_options::Vector{NoiseObj})::NoiseObj
+    weights = Weights([n.probability for n in noise_options])
+    return deepcopy(sample(rng, noise_options, weights))
+end
 
-    # Take an initial guess for the noise model
-    choice = sample(rng, [1, 2])
-    c1_count = c2_count = 0
-    if choice == 1
-        c1 = [1]; c2 = [0]
-        c1_count = 1
-    elseif choice == 2
-        c1 = [0]; c2 = [1]
-        c2_count = 1
-    end
-    noise_guess = deepcopy(noise_options[choice])
-    choice = ChoiceSystem(c1, c2, c1_count, c2_count, choice, [choice])
 
-    recovery_cfg = RecoveryConfig(
-        name,
-        sigma, 
-        recovery_type, 
-        real_noise, 
-        n_qubits, 
-        n_timesteps, 
-        n_states, 
-        seed,
-        rng
+function initialize_recovery_state(cfg::RecoveryConfig, noise_options::Vector{NoiseObj})::RecoveryState
+    ρ0     = make_initial_state(cfg)
+    choice = make_initial_choice(cfg.rng, noise_options)
+
+    noise_guess = deepcopy(noise_options[choice.current])
+    M_total     = noise_guess.supermap_noise
+
+    return RecoveryState(
+        copy(ρ0), copy(ρ0), copy(ρ0),
+        noise_guess, M_total, choice, noise_options
     )
+end
 
-    
-    M_petz, M_noise = noise_guess.supermap_petz, noise_guess.supermap_noise
-    M_total = M_noise
+function make_initial_state(cfg::RecoveryConfig)
+    if cfg.recovery_type == "iterative"
+        ψ = random_state(cfg.n_qubits)
+        return ψ * ψ'
+    elseif cfg.recovery_type == "auto"
+        return copy(cfg.sigma)
+    else
+        throw(ArgumentError("Unsupported recovery type: $(cfg.recovery_type)"))
+    end
+end
 
-    recovery_state = RecoveryState(
-       copy(ρ0),
-       copy(ρ0),
-       copy(ρ0),
-       noise_guess, 
-       M_total, 
-       choice,
-       noise_options
-    )
+function make_initial_choice(rng, noise_options::Vector{NoiseObj})::ChoiceSystem
+    n       = length(noise_options)
+    counts  = zeros(Int, n)
+    current = sample(rng, 1:n)
+    counts[current] = 1
 
-    logs = RecoveryLogs()
+    # Build per-hypothesis count vectors: 1 for chosen, 0 for others
+    count_vecs = [i == current ? [1] : [0] for i in 1:n]
 
-    return recovery_cfg, recovery_state, logs
-
+    return ChoiceSystem(count_vecs..., counts..., current, [current])
 end
