@@ -44,7 +44,7 @@ function run_experiment(config_file="./configs/config.toml")
     p_states = Progress(cfg.n_states, desc="Adaptive Recovery ")
     for s in 1:cfg.n_states
         initial_state = deepcopy(state)  # Reset state for each run
-        if cfg.recovery_type == "random"
+        if cfg.recovery_type == "iterative"
             ψ0 = random_state(cfg.n_qubits)
             ρ0 = ψ0 * ψ0'
             initial_state.ρ0 .= ρ0
