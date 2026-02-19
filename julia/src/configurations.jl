@@ -21,6 +21,7 @@ end
 
 # Static Configuration for the setup of the algorithm
 struct RecoveryConfig{T<:Number}
+    name::String
     sigma::Matrix{T}
     recovery_type::String
     real_noise::NoiseObj
@@ -37,6 +38,7 @@ mutable struct ChoiceSystem
     c1_count::Int
     c2_count::Int
     current::Int
+    current_choices::Vector{Int}
 end
 
 # Dynamic State: Updates every iteration
@@ -66,6 +68,21 @@ Reads a TOML configuration file to initialize the setup of the algorithm
 function load_configuration(config_file="./configs/config.toml")
     cfg = TOML.parsefile(config_file)
 
+    name = get(cfg, "name", "test")
+    # Get to the root folder
+    root_dir = dirname(pkgdir(DecoKiller))
+    experiment_dir = joinpath(root_dir, "experiments", name)
+    mkpath(experiment_dir)
+    mkpath(joinpath(experiment_dir, "logs"))
+    mkpath(joinpath(experiment_dir, "visualization"))
+    # Save a copy of the config file in the experiment folder for reproducibility
+    open(joinpath(experiment_dir, "config.toml"), "w") do io
+        TOML.print(io, cfg)
+    end
+    # Setup log file path
+    log_file = joinpath(experiment_dir, "debug.log")
+    setup_logger(log_file)
+
     n_qubits = get(cfg, "n_qubits", 1)
     beta = get(cfg, "beta", 2.0)
     gamma = get(cfg, "gamma", 1.0)
@@ -76,12 +93,16 @@ function load_configuration(config_file="./configs/config.toml")
     starting_state = get(cfg, "starting_state", "thermal")
     n_states = get(cfg, "n_states", 1)
 
+    # Initialize Random Number Generator with the seed
+    rng = seed == -1 ? Random.default_rng() : Xoshiro(seed)
+
     # Create the reference state for the recovery
     if starting_state == "thermal"
         sigma = thermal_state(n_qubits, beta)
     elseif starting_state == "random"
-        ψ = random_state(n_qubits; seed=seed)
-        sigma = ψ * ψ'
+        # Generate a random spectrum of eigenvalues between 0.1 and 0.9
+        spectrum = 0.1 .+ 0.9 .* rand(rng, 2^n_qubits)
+        sigma = rand_state_with_spectrum(spectrum; rng=rng)
     else
         error("Unsupported starting state: $starting_state")
     end
@@ -103,8 +124,7 @@ function load_configuration(config_file="./configs/config.toml")
         NoiseObj(noise_model[2], noise_model[1], sigma, noise_model[3], dt)
         for noise_model in noise_probabilities
     ]
-    # Initialize Random Number Generator with the seed
-    rng = Xoshiro(seed)
+    
 
     # Choose randomly a noise model
     real_noise = deepcopy(sample(rng,
@@ -123,9 +143,10 @@ function load_configuration(config_file="./configs/config.toml")
         c2_count = 1
     end
     noise_guess = deepcopy(noise_options[choice])
-    choice = ChoiceSystem(c1, c2, c1_count, c2_count, choice)
+    choice = ChoiceSystem(c1, c2, c1_count, c2_count, choice, [choice])
 
     recovery_cfg = RecoveryConfig(
+        name,
         sigma, 
         recovery_type, 
         real_noise, 

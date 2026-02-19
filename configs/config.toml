@@ -15,18 +15,17 @@
 # seed: Random seed for reproducibility (default: 42)
 # noise_probabilities: List of noise channels and their probabilities (default: empty list):
 #   - Each entry should be a tuple of the form (probability, noise_type, gamma)
-
-n_qubits        = 2
+name            = "1qubit_random_autorecovery"
+n_qubits        = 1
 beta            = 2.0
 # gamma1           = 1.0
-dt              = 0.2
+dt              = 1.0
 n_timesteps     = 20
 n_states        = 30
 starting_state  = "random"
 recovery_type   = "auto"
-seed            = 42
+seed            = -1
 noise_probabilities = [
-    [0.5, "bitflip", 1.0],
-    # [0.2, "amplitude_damping"],
-    [0.5, "dephasing", 2.0]
+    [0.4, "amplitude_damping", 0.1],
+    [0.6, "phase_damping", 0.1]
 ]

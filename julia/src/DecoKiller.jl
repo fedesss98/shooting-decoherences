@@ -9,10 +9,10 @@ get_kraus_operators,
 load_configuration, RecoveryConfig, RecoveryState, RecoveryLogs, NoiseObj,
 # initial states
 codespace_state, thermal_state, random_state,
-apply_channel, recovery_map,
+apply_channel, recovery_map, rand_state_with_spectrum,
 # metrics
 fidelity, overlap,
-
+partial_traces,
 UnitaryDilation,
 CollisionModel, apply_collision, extract_kraus_operators,
 # main function
@@ -27,9 +27,10 @@ using .PetzMaps
 using .UnitaryDilation
 
 include("utils.jl")
-include("configurations.jl")
 # Add log functionality, printing to both console and file with timestamps and log levels
 include("logging.jl")
+# Add configuration files loading and setup
+include("configurations.jl")
 # Implement the main algorithm
 include("adaptive_recovery.jl")
 
