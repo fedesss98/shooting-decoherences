@@ -7,6 +7,8 @@ const X  = [0.0im 1.0; 1.0 0.0]
     kraus_depolarizing(p::Float64)
 
 Returns Kraus operators for the depolarizing channel.
+See for example
+    https://www.preskill.caltech.edu/ph219/chap3_15.pdf#page=24.11
 """
 function get_depolarizing_operators(gamma, t)
     p = 1 - exp(-gamma * t)
@@ -26,6 +28,8 @@ end
 
 """
     get_amplitudedamping_operators(gamma, t)
+See for example
+    https://www.preskill.caltech.edu/ph219/chap3_15.pdf#page=24.11
 """
 function get_amplitudedamping_operators(gamma, t)
     e = exp(-gamma*t)
@@ -41,7 +45,25 @@ function get_amplitudedamping_operators(gamma, t)
 end
 
 """
+    get_phasedamping_operators(gamma, t)
+"""
+function get_phasedamping_operators(gamma, t)
+    e = exp(-gamma*t)
+    k1 = [
+        1 0;
+        0 sqrt(e)
+    ]
+    k2 = [
+        0 0
+        0 sqrt(1-e)
+    ]
+    return [k1, k2]
+end
+
+"""
     get_dephasing_operators(gamma, t)
+See for example
+    https://www.preskill.caltech.edu/ph219/chap3_15.pdf#page=24.11
 """
 function get_dephasing_operators(gamma, t)
     p = (1.0 - exp(-gamma*t)) / 2.0
