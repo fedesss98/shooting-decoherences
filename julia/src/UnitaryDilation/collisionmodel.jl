@@ -136,7 +136,7 @@ function CollisionModel(M::Matrix{T}, sigma::Matrix{T}) where T<:Number
     
     isempty(kraus_fwd) && push!(kraus_fwd, zeros(T, d, d))
     
-    if length(kraus_fwd) > 16
+    if length(kraus_fwd) > 64
         error("Too many Kraus operators extracted: $(length(kraus_fwd)). Consider increasing the threshold or checking the input superoperator.")
     end
 
