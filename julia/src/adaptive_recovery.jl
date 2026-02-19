@@ -18,32 +18,34 @@ Uses the Helstrom measurement (optimal POVM for minimum error discrimination):
 - Π₂ = I - Π₁
 - Returns pᵢ = Tr(Πᵢ * ρ_test)
 """
-function discrimin(ρ_test, ρ1, ρ2)
-    # Compute the difference of density matrices
+function discrimin(ρ_test, ρ1, ρ2; tol=1e-10)
+    d = size(ρ_test, 1)
     Δρ = ρ1 - ρ2
     
-    # Diagonalize to find eigenvalues and eigenvectors
+    # Early exit: states are indistinguishable, return uniform
+    if norm(Δρ) < tol
+        return [0.5, 0.5]
+    end
+
     eigen_decomp = eigen(Hermitian(Δρ))
-    eigenvalues = eigen_decomp.values
+    eigenvalues  = eigen_decomp.values
     eigenvectors = eigen_decomp.vectors
     
-    # Construct Π₁: projector onto positive eigenspace
-    Π1 = zeros(ComplexF64, size(ρ1))
+    Π1 = zeros(ComplexF64, d, d)
     for i in eachindex(eigenvalues)
-        if eigenvalues[i] > 1e-10  # positive eigenvalue (with numerical tolerance)
-            v = eigenvectors[:, i]
-            Π1 += v * v'  # Add rank-1 projector |v⟩⟨v|
+        if eigenvalues[i] > tol
+            v   = eigenvectors[:, i]
+            Π1 += v * v'
         end
     end
+    Π2 = I(d) - Π1
     
-    # Construct Π₂: complement projector
-    Π2 = I - Π1
-    
-    # Compute probabilities
     p1 = real(tr(Π1 * ρ_test))
     p2 = real(tr(Π2 * ρ_test))
     
-    return [p1, p2]
+    # Numerical sanity: p1 + p2 should be 1
+    total = p1 + p2
+    return [p1/total, p2/total]
 end
 
 function update_noise_history!(noise_obj)
