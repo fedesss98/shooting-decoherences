@@ -1,4 +1,57 @@
 """
+    rand_unitary_haar(N)
+
+Generates a random unitary matrix of size N×N distributed according 
+to the Haar measure (CUE). 
+Reference: F. Mezzadri, "How to generate random matrices from the classical compact groups"
+"""
+function rand_unitary_haar(N::Int, rng)
+    # 1. Generate a random complex Gaussian matrix
+    if !isnothing(rng)
+        Z = randn(rng, ComplexF64, N, N) / sqrt(2.0)
+    else
+        Z = randn(ComplexF64, N, N) / sqrt(2.0)
+    end
+    
+    # 2. Perform QR decomposition
+    Q, R = qr(Z)
+    
+    # 3. Correct the phases of the diagonal of R to ensure strict Haar distribution
+    # (The standard QR is unique only up to phases; this fixes the gauge)
+    d = diag(R)
+    phases = d ./ abs.(d)
+    return Matrix(Q) * Diagonal(phases)
+end
+
+"""
+    rand_state_with_spectrum(spectrum)
+
+Generates a random Hermitian density matrix (or Hamiltonian) with the exact 
+eigenvalues provided in `spectrum`.
+"""
+function rand_state_with_spectrum(spectrum::Vector{<:Number}; rng=nothing)
+    # Ensure the spectrum is normalized
+    spectrum = abs.(spectrum) / sum(abs.(spectrum))
+    N = length(spectrum)
+    
+    # Generate the random basis change
+    U = rand_unitary_haar(N, rng)
+    
+    # Construct the matrix: rho = U * Λ * U†
+    # We use Diagonal for efficiency
+    Lambda = Diagonal(spectrum)
+    
+    state = U * Lambda * U'
+    for i in eachindex(state)
+        re = abs(real(state[i])) > 1e-8 ? real(state[i]) : 0.0 
+        img = abs(imag(state[i])) > 1e-8 ? imag(state[i]) : 0.0 
+        state[i] = re + im*img
+    end
+    return state 
+end
+
+
+"""
     fullrank_state(n_qubits)
 Create a full-rank density matrix for n_qubits
 """
@@ -81,4 +134,12 @@ function random_state(n_qubits; seed=nothing)
     β = exp(im * ϕ) * sin(θ / 2)
 
     return input_state(n_qubits, α, β)
+end
+
+"""
+    maxmix_state(n_qubits)
+Returns the maximally mixed state for n_qubits
+"""
+function maxmix_state(n_qubits)
+    return Matrix(I, 2^n_qubits, 2^n_qubits) / 2^n_qubits
 end
