@@ -249,3 +249,16 @@ function unvec(state)
 
   return reshape(state, dims, dims)
 end
+
+"""
+  embed_state(ρ, d_target)
+Embed a density matrix ρ into a larger Hilbert space of dimension d_target by padding with zeros.
+This is used to match the dimensions of the ancilla when performing discrimination or recovery.
+"""
+function embed_state(ρ, d_target)
+    d = size(ρ, 1)
+    d == d_target && return ρ
+    ρ_out = zeros(ComplexF64, d_target, d_target)
+    ρ_out[1:d, 1:d] = ρ
+    return ρ_out
+end
