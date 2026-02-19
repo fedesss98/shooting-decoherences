@@ -234,8 +234,6 @@ function get_kraus_operators(noise, gamma, t)
     return get_amplitudedamping_operators(gamma, t)
   elseif noise == "phase_damping"
     return get_phasedamping_operators(gamma, t)
-  elseif noise == "dephasing"
-    return get_dephasing_operators(gamma, t)
   elseif noise == "bitflip"
     return get_bitflip_operators(gamma, t)
   else

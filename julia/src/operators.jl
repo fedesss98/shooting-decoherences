@@ -48,6 +48,7 @@ end
 """
     get_phasedamping_operators(gamma, t)
 See for example
+    https://www.preskill.caltech.edu/ph219/chap3_15.pdf#page=24.11
     https://docs.pennylane.ai/en/stable/code/api/pennylane.PhaseDamping.html
 """
 function get_phasedamping_operators(gamma, t)
@@ -60,20 +61,6 @@ function get_phasedamping_operators(gamma, t)
         0 0
         0 sqrt(1-e)
     ]
-    return [k1, k2]
-end
-
-"""
-    get_dephasing_operators(gamma, t)
-See for example
-    https://www.preskill.caltech.edu/ph219/chap3_15.pdf#page=24.11
-"""
-function get_dephasing_operators(gamma, t)
-    p = (1.0 - exp(-gamma*t)) / 2.0
-
-    k1 = sqrt(1.0 - p) * I2
-    k2 = sqrt(p) * Z
-    
     return [k1, k2]
 end
 
