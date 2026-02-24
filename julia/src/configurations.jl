@@ -96,7 +96,13 @@ function parse_recovery_config(cfg::Dict)::RecoveryConfig
 
     sigma         = make_reference_state(starting_state, n_qubits, beta, rng)
     noise_options = parse_noise_options(cfg, sigma, dt)
-    real_noise    = get(cfg, "real_noise", sample_real_noise(rng, noise_options))
+    if get(cfg, "real_noise", nothing) === nothing
+        println("No real noise specified in config, sampling from noise options...")
+        real_noise = sample_real_noise(rng, noise_options)
+    else
+        println("Using specified real noise from config...")
+        real_noise = [n for n in noise_options if n.name == cfg["real_noise"]][1]
+    end
 
     return RecoveryConfig(
         name, sigma, recovery_type, real_noise,
