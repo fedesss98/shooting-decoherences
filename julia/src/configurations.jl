@@ -53,13 +53,17 @@ mutable struct RecoveryState
     noise_options::Vector{NoiseObj}
 end
 
+# Define the type for logging the supermaps at each step (using a NamedTuple for clarity)
+const SupermapsLogged = @NamedTuple{Nx::Matrix{ComplexF64}, N1::Matrix{ComplexF64}, N2::Matrix{ComplexF64}, P::Matrix{ComplexF64}}
 # Logs for tracking evolution of metrics
 struct RecoveryLogs
     fidelities::Vector{Float64}
     ref_fidelities::Vector{Float64}
+    # This will store NamedTuples containing 4 matrices
+    maps::Vector{SupermapsLogged}
 end
 # Constructor to initialize empty logs
-RecoveryLogs() = RecoveryLogs(Float64[], Float64[])
+RecoveryLogs() = RecoveryLogs(Float64[], Float64[], SupermapsLogged[])
 
 """
     load_configuration(config_file)
