@@ -1,3 +1,7 @@
+using Plots.Measures
+using Plots
+
+
 function get_dual_intervals(mask::Vector{Int})
     # Returns vector of tuples (start, end) for both 0s and 1s
     # Uses Float64 for bounds to meet exactly in the middle (e.g., 2.5)
@@ -96,4 +100,54 @@ function plot_autorecovery(state, cfg, logs; kwargs...)
 		savefig(p, joinpath(output_folder, "adaptive_recovery_ampdamp_phasedamp.png"))
 		savefig(p, joinpath(output_folder, "adaptive_recovery_ampdamp_phasedamp.pdf"))
 		display(p)
+end
+
+function plot_average_fidelity(avg_fidelities, avg_ref_fidelities, state, cfg; kwargs...)
+	ylims = get(kwargs, :ylims, [0.8, 1.01])
+	xlims = get(kwargs, :xlims, [0, cfg.n_timesteps])
+	size = get(kwargs, :size, (1200, 400))
+	infidelity = get(kwargs, :infidelity, false)
+
+	real_noise_label = titlecase(join(split(cfg.real_noise.name, '_'), ' '))
+
+	p = plot(
+		ylim=ylims, xlim=xlims, size=size, legend=:outertopright,
+		titlefontsize=18,
+		guidefontsize=18,
+		tickfontsize=16,
+		legendfontsize=12,
+		grid=false,
+		left_margin = 10mm,
+		top_margin = 10mm,
+		bottom_margin = 9mm,
+		yscale=infidelity ? :log10 : :identity
+		)
+		
+	vline!(p, collect(0:length(avg_ref_fidelities)) .+ 1.2, linestyle=:dash, color=:lightgrey, lw=1, label=nothing)
+	
+	if infidelity
+		avg_ref_fidelities = 1 .- avg_ref_fidelities
+		avg_fidelities = 1 .- avg_fidelities
+	end
+
+	scatter!(
+		[[1.0; avg_ref_fidelities] [1.0; avg_fidelities]],
+		labels=["Free evolution" "Recovered Evolution"],
+		xlabel="Timestep", 
+		ylabel=infidelity ? "Infidelity" : "Fidelity",
+		shape = [:dtriangle :circle],
+		markercolor = [:steelblue :red],
+		markerstrokecolor = [:steelblue :transparent],
+		markerstrokewidth = 2, markersize = [7 5],
+		title="Adaptive Recovery under $(real_noise_label) Noise with $(cfg.n_qubits) Qubits"
+		)
+
+		if get(kwargs, :save, false)
+			output_folder = "../experiments/$(cfg.name)/visualization/"
+			plot_title = infidelity ? "adaptive_recovery_infidelity_avg" : "adaptive_recovery_avg"
+			savefig(p, joinpath(output_folder, "$(plot_title).png"))
+			savefig(p, joinpath(output_folder, "$(plot_title).pdf"))
+		end
+		display(p)
+	
 end
