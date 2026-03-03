@@ -167,11 +167,19 @@ function initialize_recovery_state(cfg::RecoveryConfig, noise_options::Vector{No
 end
 
 function make_initial_state(cfg::RecoveryConfig)
-    if cfg.recovery_type == "iterative"
+    if cfg.recovery_type == "random"
         ψ = random_state(cfg.n_qubits)
         return ψ * ψ'
     elseif cfg.recovery_type == "auto"
         return copy(cfg.sigma)
+    elseif cfg.recovery_type == "codespace"
+        a, b, c, d = rand(cfg.rng, 4)
+        ψ = codespace_state(cfg.n_qubits, a, b, c, d)
+        return ψ * ψ'
+    elseif cfg.recovery_type == "inputstate"
+        a, b = rand(cfg.rng, 2)
+        ψ = input_state(cfg.n_qubits, a, b)
+        return ψ * ψ'
     else
         throw(ArgumentError("Unsupported recovery type: $(cfg.recovery_type)"))
     end

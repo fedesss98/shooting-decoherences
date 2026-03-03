@@ -10,22 +10,23 @@
 #   - "thermal": Use a thermal state at inverse temperature beta
 #   - "random": Use a random state in the codespace a|00...0> + b|11...1>
 # recovery_type: Type of recovery experiment (default: "auto"):
-#   - "iterative": Use random initial states for each run
+#   - "random": Use random initial states for each run
+#   - "codespace": Use random states in the codespace a|00...0> + b|11...1>
 #   - "auto": Use the reference state itself as initial state
 # seed: Random seed for reproducibility (default: 42)
 # noise_options: List of noise channels and their probabilities (default: empty list):
 #   - Each entry should be a tuple of the form (probability, noise_type, gamma)
-name            = "3qubit_thermal_autorecovery_ampdamp2"
-n_qubits        = 3
-beta            = 2.0
+name            = "test"
+n_qubits        = 2
+beta            = 4.0
 dt              = 1.0
-n_timesteps     = 40
-n_states        = 30
+n_timesteps     = 10
+n_states        = 150
 starting_state  = "thermal"
-recovery_type   = "auto"
-seed            = 92190
+recovery_type   = "inputstate"
+seed            = 12
 noise_options = [
     [0.4, "amplitude_damping", 0.2],
-    [0.6, "bitflip", 0.2]
+    [0.6, "bitflip", 2.0]
 ]
-real_noise = "amplitude_damping"
+real_noise = "bitflip"

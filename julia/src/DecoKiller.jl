@@ -8,7 +8,7 @@ get_kraus_operators,
 # initial configuration objects
 load_configuration, RecoveryConfig, RecoveryState, RecoveryLogs, NoiseObj,
 # initial states
-codespace_state, thermal_state, random_state,
+codespace_state, thermal_state, random_state, input_state,
 apply_channel, recovery_map, rand_state_with_spectrum,
 # metrics
 fidelity, overlap,
@@ -44,8 +44,22 @@ function run_experiment(config_file="./configs/config.toml")
     p_states = Progress(cfg.n_states, desc="Adaptive Recovery ")
     for s in 1:cfg.n_states
         initial_state = deepcopy(state)  # Reset state for each run
-        if cfg.recovery_type == "iterative"
+        if cfg.recovery_type == "random"
             ψ0 = random_state(cfg.n_qubits)
+            ρ0 = ψ0 * ψ0'
+            initial_state.ρ0 .= ρ0
+            initial_state.ρ_free .= ρ0
+            initial_state.ρ_rec .= ρ0
+        elseif cfg.recovery_type == "codespace"
+            a, b, c, d = rand(cfg.rng, 4)
+            ψ0 = codespace_state(cfg.n_qubits, a, b, c, d)
+            ρ0 = ψ0 * ψ0'
+            initial_state.ρ0 .= ρ0
+            initial_state.ρ_free .= ρ0
+            initial_state.ρ_rec .= ρ0
+        elseif cfg.recovery_type == "inputstate"
+            a, b = rand(cfg.rng, 2)
+            ψ0 = input_state(cfg.n_qubits, a, b)
             ρ0 = ψ0 * ψ0'
             initial_state.ρ0 .= ρ0
             initial_state.ρ_free .= ρ0

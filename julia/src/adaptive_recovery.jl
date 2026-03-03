@@ -21,7 +21,7 @@ Uses the Helstrom measurement (optimal POVM for minimum error discrimination):
 function discrimin(ρ_test, ρ1, ρ2; tol=1e-10)
     d = size(ρ_test, 1)
     Δρ = ρ1 - ρ2
-    
+
     # Early exit: states are indistinguishable, return uniform
     if norm(Δρ) < tol
         return [0.5, 0.5]
@@ -30,7 +30,7 @@ function discrimin(ρ_test, ρ1, ρ2; tol=1e-10)
     eigen_decomp = eigen(Hermitian(Δρ))
     eigenvalues  = eigen_decomp.values
     eigenvectors = eigen_decomp.vectors
-    
+
     Π1 = zeros(ComplexF64, d, d)
     for i in eachindex(eigenvalues)
         if eigenvalues[i] > tol
@@ -39,10 +39,10 @@ function discrimin(ρ_test, ρ1, ρ2; tol=1e-10)
         end
     end
     Π2 = I(d) - Π1
-    
+
     p1 = real(tr(Π1 * ρ_test))
     p2 = real(tr(Π2 * ρ_test))
-    
+
     # Numerical sanity: p1 + p2 should be 1
     total = p1 + p2
     return [p1/total, p2/total]
