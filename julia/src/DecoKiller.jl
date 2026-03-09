@@ -6,7 +6,7 @@ export
 PetzMaps,
 get_kraus_operators, 
 # initial configuration objects
-load_configuration, RecoveryConfig, RecoveryState, RecoveryLogs, NoiseObj,
+load_configuration, RecoveryConfig, RecoveryState, RecoveryLogs, NoiseObj, ChoiceSystem,
 # initial states
 codespace_state, thermal_state, random_state, input_state,
 apply_channel, recovery_map, rand_state_with_spectrum,
@@ -17,7 +17,6 @@ UnitaryDilation,
 CollisionModel, apply_collision, extract_kraus_operators,
 # main function
 run_experiment, discrimin, update_noise_history!, measure_ancilla, update_noise_guess, step_recovery!
-
 
 include("PetzMaps.jl")
 include("UnitaryDilation/UnitaryDilation.jl")
