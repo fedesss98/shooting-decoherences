@@ -159,11 +159,11 @@ function step_recovery!(step::Int, state::RecoveryState, config::RecoveryConfig,
   # The previous-step choice changes only if there is enough inertia in the opposing choice
   # Positive `diff` means that c1 is leading, negative means that c2 is leading
   if state.choice.current == 1
-      if diff < -inertia
+      if diff <= -inertia
           state.choice.current = 2
       end
   else
-      if diff > inertia
+      if diff >= inertia
           state.choice.current = 1
       end
   end
