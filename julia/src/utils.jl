@@ -236,6 +236,8 @@ function get_kraus_operators(noise, gamma, t)
     return get_phasedamping_operators(gamma, t)
   elseif noise == "bitflip"
     return get_bitflip_operators(gamma, t)
+  elseif noise == "depolarizing"
+    return get_depolarizing_operators(gamma, t)
   else
     error("Unknown noise model: $noise")
   end
