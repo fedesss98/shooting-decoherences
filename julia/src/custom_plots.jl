@@ -121,7 +121,8 @@ function plot_average_fidelity(avg_fidelities, avg_ref_fidelities, state, cfg; s
     real_noise_label = titlecase(join(split(cfg.real_noise.name, '_'), ' '))
 
     p = plot(
-        ylim=ylims, xlim=xlims, size=size, legend=:outertopright,
+        ylim=ylims, xlim=xlims, size=size, 
+        legend=get(kwargs, :legend, :outertopright),
         titlefontsize=18,
         guidefontsize=18,
         tickfontsize=16,
@@ -162,7 +163,7 @@ function plot_average_fidelity(avg_fidelities, avg_ref_fidelities, state, cfg; s
     if !show
         return p
     end
-    
+
     display(p)
 
 end
