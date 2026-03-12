@@ -16,7 +16,8 @@ partial_traces,
 UnitaryDilation,
 CollisionModel, apply_collision, extract_kraus_operators,
 # main function
-run_experiment, discrimin, update_noise_history!, measure_ancilla, update_noise_guess, step_recovery!
+run_experiment, discrimin, update_noise_history!, 
+measure_ancilla, update_noise_guess, reset_initial_state!, step_recovery!
 
 include("PetzMaps.jl")
 include("UnitaryDilation/UnitaryDilation.jl")
@@ -34,7 +35,7 @@ include("configurations.jl")
 include("adaptive_recovery.jl")
 
 
-function reset_initial_state!(state::RecoveryState, recovery_type::String)
+function reset_initial_state!(state::RecoveryState, cfg::RecoveryConfig)
     if cfg.recovery_type == "random"
         ψ0 = random_state(cfg.n_qubits)
         ρ0 = ψ0 * ψ0'
@@ -73,7 +74,7 @@ function run_experiment(config_file="./configs/config.toml")
     p_states = Progress(cfg.n_states, desc="Adaptive Recovery ")
     for s in 1:cfg.n_states
         initial_state = deepcopy(state)  # Reset state for each run
-        reset_initial_state!(initial_state, cfg.recovery_type)
+        reset_initial_state!(initial_state, cfg)
 
         # Setup the progress bar for one state evolution
         p_time = Progress(
