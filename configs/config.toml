@@ -11,22 +11,23 @@
 #   - "random": Use a random state in the codespace a|00...0> + b|11...1>
 # recovery_type: Type of recovery experiment (default: "auto"):
 #   - "random": Use random initial states for each run
-#   - "codespace": Use random states in the codespace a|00...0> + b|11...1>
+#   - "codespace": Use random states in the codespace a|00...0> + b|11...1> mixed with sigma
 #   - "auto": Use the reference state itself as initial state
+#   - "inputstate": Use a specific input state defined by the user (default: "thermal")
 # seed: Random seed for reproducibility (default: 42)
 # noise_options: List of noise channels and their probabilities (default: empty list):
 #   - Each entry should be a tuple of the form (probability, noise_type, gamma)
 name            = "test"
-n_qubits        = 2
+n_qubits        = 3
 beta            = 4.0
 dt              = 1.0
-n_timesteps     = 10
+n_timesteps     = 20
 n_states        = 150
 starting_state  = "thermal"
-recovery_type   = "inputstate"
-seed            = 12
+recovery_type   = "codespace"
+seed            = 5121
 noise_options = [
-    [0.4, "amplitude_damping", 0.2],
-    [0.6, "bitflip", 2.0]
+    [0.5, "amplitude_damping", 0.2],
+    [0.5, "bitflip", 0.2]
 ]
 real_noise = "bitflip"

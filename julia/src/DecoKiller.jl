@@ -50,9 +50,13 @@ function run_experiment(config_file="./configs/config.toml")
             initial_state.ρ_free .= ρ0
             initial_state.ρ_rec .= ρ0
         elseif cfg.recovery_type == "codespace"
-            a, b, c, d = rand(cfg.rng, 4)
-            ψ0 = codespace_state(cfg.n_qubits, a, b, c, d)
-            ρ0 = ψ0 * ψ0'
+            sigma = cfg.sigma
+            p = rand()
+            max_x = p * (1-p)  # Maximum allowed magnitude for |x|^2
+            radius = sqrt(rand() * max_x)
+            x = radius * exp(2π * im * rand())
+            ρ = codespace_dm(cfg.n_qubits, p, x)
+            ρ0 = ρ + sigma
             initial_state.ρ0 .= ρ0
             initial_state.ρ_free .= ρ0
             initial_state.ρ_rec .= ρ0

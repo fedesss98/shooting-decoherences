@@ -177,9 +177,13 @@ function make_initial_state(cfg::RecoveryConfig)
     elseif cfg.recovery_type == "auto"
         return copy(cfg.sigma)
     elseif cfg.recovery_type == "codespace"
-        a, b, c, d = rand(cfg.rng, 4)
-        ψ = codespace_state(cfg.n_qubits, a, b, c, d)
-        return ψ * ψ'
+        sigma = cfg.sigma
+        p = rand()
+        max_x = p * (1-p)  # Maximum allowed magnitude for |x|^2
+        radius = sqrt(rand() * max_x)
+        x = radius * exp(2π * im * rand())
+        ρ = codespace_dm(cfg.n_qubits, p, x)
+        return ρ + sigma
     elseif cfg.recovery_type == "inputstate"
         a, b = rand(cfg.rng, 2)
         ψ = input_state(cfg.n_qubits, a, b)
