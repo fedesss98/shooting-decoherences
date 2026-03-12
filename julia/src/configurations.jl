@@ -183,7 +183,9 @@ function make_initial_state(cfg::RecoveryConfig)
         radius = sqrt(rand() * max_x)
         x = radius * exp(2π * im * rand())
         ρ = codespace_dm(cfg.n_qubits, p, x)
-        return ρ + sigma
+        ρ0 = ρ + sigma
+        ρ0 = ρ0 / tr(ρ0)  # Normalize to ensure it's a valid density matrix
+        return ρ0
     elseif cfg.recovery_type == "inputstate"
         a, b = rand(cfg.rng, 2)
         ψ = input_state(cfg.n_qubits, a, b)

@@ -57,6 +57,7 @@ function run_experiment(config_file="./configs/config.toml")
             x = radius * exp(2π * im * rand())
             ρ = codespace_dm(cfg.n_qubits, p, x)
             ρ0 = ρ + sigma
+            ρ0 = ρ0 / tr(ρ0)  # Normalize to ensure it's a valid density matrix
             initial_state.ρ0 .= ρ0
             initial_state.ρ_free .= ρ0
             initial_state.ρ_rec .= ρ0
