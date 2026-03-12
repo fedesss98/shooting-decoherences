@@ -107,7 +107,7 @@ end
 
 Create a logic qubit a|00...0> + b|11...1>,
 where we adopt the convention that |00...0> is at index 1
-of the 2^n_qubits state vector and |11...1> is at index n_qubits
+of the 2^n_qubits state vector and |11...1> is at index 2^n_qubits
 """
 function codespace_state(n_qubits, a, b, c, d)
     psi = zeros(ComplexF64, 2^n_qubits)
@@ -117,6 +117,19 @@ function codespace_state(n_qubits, a, b, c, d)
     psi[end] = b
     psi = normalize(psi)
     return psi * psi'
+end
+
+function codespace_dm(n_qubits, p, x)
+    dim = 2^n_qubits
+
+    rho = zeros(ComplexF64, dim, dim)
+
+    rho[1, 1] = p
+    rho[end, end] = 1 - p
+    rho[1, dim] = x
+    rho[dim, 1] = conj(x)
+
+    return rho
 end
 
 """

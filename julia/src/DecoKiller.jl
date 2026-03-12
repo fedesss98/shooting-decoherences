@@ -8,7 +8,7 @@ get_kraus_operators,
 # initial configuration objects
 load_configuration, RecoveryConfig, RecoveryState, RecoveryLogs, NoiseObj, ChoiceSystem,
 # initial states
-codespace_state, thermal_state, random_state, input_state,
+codespace_state, codespace_dm, thermal_state, random_state, input_state,
 apply_channel, recovery_map, rand_state_with_spectrum,
 # metrics
 fidelity, overlap,
