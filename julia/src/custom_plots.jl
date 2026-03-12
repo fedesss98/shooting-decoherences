@@ -112,7 +112,7 @@ function plot_autorecovery(state, cfg, logs; show=true, save=false, kwargs...)
     display(p)
 end
 
-function plot_average_fidelity(avg_fidelities, avg_ref_fidelities, state, cfg; kwargs...)
+function plot_average_fidelity(avg_fidelities, avg_ref_fidelities, state, cfg; show=true, save=false, kwargs...)
     ylims = get(kwargs, :ylims, [0.8, 1.01])
     xlims = get(kwargs, :xlims, [0, cfg.n_timesteps])
     size = get(kwargs, :size, (1200, 400))
@@ -152,12 +152,17 @@ function plot_average_fidelity(avg_fidelities, avg_ref_fidelities, state, cfg; k
         title="Adaptive Recovery under $(real_noise_label) Noise with $(cfg.n_qubits) Qubits"
     )
 
-    if get(kwargs, :save, false)
+    if save
         output_folder = "../experiments/$(cfg.name)/visualization/"
         plot_title = infidelity ? "adaptive_recovery_infidelity_avg" : "adaptive_recovery_avg"
         savefig(p, joinpath(output_folder, "$(plot_title).png"))
         savefig(p, joinpath(output_folder, "$(plot_title).pdf"))
     end
+
+    if !show
+        return p
+    end
+    
     display(p)
 
 end
