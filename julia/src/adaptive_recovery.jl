@@ -19,33 +19,90 @@ Uses the Helstrom measurement (optimal POVM for minimum error discrimination):
 - Returns pᵢ = Tr(Πᵢ * ρ_test)
 """
 function discrimin(ρ_test, ρ1, ρ2; tol=1e-10)
-    d = size(ρ_test, 1)
-    Δρ = ρ1 - ρ2
+  d = size(ρ_test, 1)
+  Δρ = ρ1 - ρ2
 
-    # Early exit: states are indistinguishable, return uniform
-    if norm(Δρ) < tol
-        return [0.5, 0.5]
-    end
+  # Early exit: states are indistinguishable, return uniform
+  if norm(Δρ) < tol
+      return [0.5, 0.5]
+  end
 
-    eigen_decomp = eigen(Hermitian(Δρ))
-    eigenvalues  = eigen_decomp.values
-    eigenvectors = eigen_decomp.vectors
+  eigen_decomp = eigen(Hermitian(Δρ))
+  eigenvalues  = eigen_decomp.values
+  eigenvectors = eigen_decomp.vectors
 
-    Π1 = zeros(ComplexF64, d, d)
-    for i in eachindex(eigenvalues)
-        if eigenvalues[i] > tol
-            v   = eigenvectors[:, i]
-            Π1 += v * v'
-        end
-    end
-    Π2 = I(d) - Π1
+  Π1 = zeros(ComplexF64, d, d)
+  for i in eachindex(eigenvalues)
+      if eigenvalues[i] > tol
+          v   = eigenvectors[:, i]
+          Π1 += v * v'
+      end
+  end
+  Π2 = I(d) - Π1
 
-    p1 = real(tr(Π1 * ρ_test))
-    p2 = real(tr(Π2 * ρ_test))
+  p1 = real(tr(Π1 * ρ_test))
+  p2 = real(tr(Π2 * ρ_test))
 
-    # Numerical sanity: p1 + p2 should be 1
-    total = p1 + p2
-    return [p1/total, p2/total]
+  # Numerical sanity: p1 + p2 should be 1
+  total = p1 + p2
+  return [p1/total, p2/total]
+end
+
+"""
+    discrim(ρ_test, ρ₁, ρ₂, ds, da; tol=1e-10)
+
+Performs optimal discrimination between two ancillas entangled in the 
+bipartite states ρ₁ and ρ₂, given a test subsystem state ρ_test. 
+Returns the probability that ρ_test is state i.
+
+# Arguments
+- `ρ_test`: The test density matrix to discriminate
+- `ρ₁`: First reference density matrix
+- `ρ₂`: First reference density matrix
+- `ds`: Dimension of the subsystem A (the one we trace out)
+- `da`: Dimension of the subsystem B (the one we want to discriminate)
+
+# Returns
+- `(p₁, p₂)`: Probabilities pᵢ = Tr(Πᵢ * ρ_test)
+"""
+function discrimin(ρ_test, ρ1, ρ2, ds, da; tol=1e-10)
+  # Check this is actually a bipartite state of the expected dimensions
+  size(ρ_test) == (ds*da, ds*da) || error("ρ_test has incompatible dimensions")
+  size(ρ1) == (ds*da, ds*da) || error("ρ1 has incompatible dimensions")
+  size(ρ2) == (ds*da, ds*da) || error("ρ2 has incompatible dimensions")
+  
+  # Trace out the system to get the reduced states of the ancilla
+  η = ptrace_sys(ρ_test, ds, da)
+  η1 = ptrace_sys(ρ1, ds, da)
+  η2 = ptrace_sys(ρ2, ds, da)
+
+  d = size(ρ_test, 1)
+  Δη = η1 - η2
+
+  # Early exit: states are indistinguishable, return uniform
+  if norm(Δη) < tol
+      return [0.5, 0.5]
+  end
+
+  eigen_decomp = eigen(Hermitian(Δη))
+  eigenvalues  = eigen_decomp.values
+  eigenvectors = eigen_decomp.vectors
+
+  Π1 = zeros(ComplexF64, d, d)
+  for i in eachindex(eigenvalues)
+      if eigenvalues[i] > tol
+          v   = eigenvectors[:, i]
+          Π1 += v * v'
+      end
+  end
+  Π2 = I(d) - Π1
+
+  p1 = real(tr(Π1 * η_test))
+  p2 = real(tr(Π2 * η_test))
+
+  # Numerical sanity: p1 + p2 should be 1
+  total = p1 + p2
+  return [p1/total, p2/total]
 end
 
 function update_noise_history!(noise_obj)
@@ -135,10 +192,10 @@ function step_recovery!(step::Int, state::RecoveryState, config::RecoveryConfig,
   state.noise_options[1].supermap = O1 * P * N1
   state.noise_options[2].supermap = O2 * P * N2
   
-  # 5. Compare output ancillas
-	# First, we extend the ancillas dimensionality
-	max_d_ancillas = 4^config.n_qubits
-	η, η1, η2 = [embed_state(ancilla, max_d_ancillas) for ancilla in (η, η1, η2)]
+  # 5. Compare output ancillas still correlated with the state
+	# First, we extend the system dimensionality
+	max_d_system = 2^(3 * config.n_qubits)
+	α, α1, α2 = [embed_state(state, max_d_system) for state in (ρ_rec, ρ1, ρ2)]
 	# and normalize them with the probabilities of their respective noise channels
 	η1 = state.noise_options[1].probability * η1
 	η2 = state.noise_options[2].probability * η2
