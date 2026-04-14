@@ -105,11 +105,17 @@ function step_recovery!(step::Int, state::RecoveryState, config::RecoveryConfig,
   model = CollisionModel(state.choice.current == 1 ? N1 : N2, config.sigma)
   P = kraus_to_superop(model.kraus_rec);
 
-  ρ_rec, η = apply_collision(model, ρ_rec_)
+  # Get the composite state
+  ρ_rec = apply_collision(model, ρ_rec_; trace=false)
   model1 = CollisionModel(N1, config.sigma)
-  ρ1, η1 = apply_collision(model1, ρ1)
+  ρ1 = apply_collision(model1, ρ1; trace=false)
   model2 = CollisionModel(N2, config.sigma)
-  ρ2, η2 = apply_collision(model2, ρ2)
+  ρ2 = apply_collision(model2, ρ2; trace=false)
+
+  # 2a. Apply noise again only on the system
+  ρ_rec = apply_extended_channel(ρ_rec, Ox, 2^config.n_qubits)
+  ρ1 = apply_extended_channel(ρ1, O1, 2^config.n_qubits)
+  ρ2 = apply_extended_channel(ρ2, O2, 2^config.n_qubits)
 
   # 3. Logging
   fid_initial = fidelity(state.ρ0, ρ_rec)

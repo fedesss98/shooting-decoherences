@@ -21,7 +21,7 @@ Returns a Tuple:
  - The recovered state after partial trace over ancilla
  - The modified ancilla state after interaction
 """
-function apply_collision(model::CollisionModel, rho::Matrix{T}) where T
+function apply_collision(model::CollisionModel, rho::Matrix{T}; trace::Bool=false) where T
     d_s = model.dim_sys
     d_a = model.dim_anc
     
@@ -35,9 +35,12 @@ function apply_collision(model::CollisionModel, rho::Matrix{T}) where T
     # 2. Apply Unitary: U (ρ ⊗ |0><0|) U†
     rho_after = model.U * rho_total * model.U'
     
-    rho_sys_out, rho_anc_out = partial_traces(rho_after, d_s, d_a)
+    if trace
+        rho_sys_out, rho_anc_out = partial_traces(rho_after, d_s, d_a)
+        return (rho_sys_out, rho_anc_out)
+    end
     
-    return (rho_sys_out, rho_anc_out)
+    return rho_after
 end
 
 
