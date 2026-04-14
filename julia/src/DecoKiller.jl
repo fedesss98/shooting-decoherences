@@ -9,7 +9,7 @@ get_kraus_operators,
 load_configuration, RecoveryConfig, RecoveryState, RecoveryLogs, NoiseObj, ChoiceSystem,
 # initial states
 codespace_state, codespace_dm, thermal_state, random_state, input_state,
-apply_channel, recovery_map, rand_state_with_spectrum,
+apply_channel, apply_extended_channel, recovery_map, rand_state_with_spectrum,
 # metrics
 fidelity, overlap,
 partial_traces,

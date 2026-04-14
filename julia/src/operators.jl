@@ -112,6 +112,15 @@ function apply_channel(kraus, ρ, n_qubits::Int)
     return ρi
 end
 
+"""
+    apply_extended_channel(ρ, kraus, origin_dim)
+"""
+function apply_extended_channel(ρ, kraus, origin_dim)
+    dim_to_extend = size(ρ, 1) ÷ origin_dim
+    kraus_extended = [kron(k, I(dim_to_extend)) for k in kraus]
+    return sum([k*ρ*k' for k in kraus_extended])
+end
+
 
 """
     partial_recovery_function(kraus, σ, n_qubits)
