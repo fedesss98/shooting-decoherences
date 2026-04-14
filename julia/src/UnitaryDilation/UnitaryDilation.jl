@@ -3,7 +3,9 @@ module UnitaryDilation
 using LinearAlgebra
 
 export 
-CollisionModel, apply_collision, extract_kraus_operators, partial_traces, unitary_dilation
+CollisionModel, apply_collision, extract_kraus_operators, 
+partial_traces, ptrace_ancilla, ptrace_system,
+unitary_dilation
 
 include("unitary_dilation.jl")
 include("extract_kraus.jl")
