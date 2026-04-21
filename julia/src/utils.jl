@@ -211,6 +211,54 @@ function kraus_to_superop(kraus_ops)
     return superop
 end
 
+using LinearAlgebra
+
+function kraus_from_unitary(
+    U::AbstractMatrix{T},
+    d_s::Int,
+    d_a::Int;
+    ancilla_state::AbstractMatrix,
+    atol::Real=1e-12,
+) where T
+    size(U) == (d_s*d_a, d_s*d_a) || throw(ArgumentError("wrong U size"))
+    size(ancilla_state) == (d_a, d_a) || throw(ArgumentError("wrong ancilla size"))
+
+    eig = eigen(Hermitian(Matrix{T}(ancilla_state)))
+    vals = eig.values
+    vecs = eig.vectors
+
+    kraus = Matrix{T}[]
+
+    # (s,a) -> (s-1)*d_a + a
+    for ν in eachindex(vals)
+        pν = real(vals[ν])
+        pν <= atol && continue
+        ψν = vecs[:, ν]
+
+        for i in 1:d_a
+            K = zeros(T, d_s, d_s)
+
+            for sout in 1:d_s
+                row_base = (sout - 1) * d_a
+                for sin in 1:d_s
+                    col_base = (sin - 1) * d_a
+                    amp = zero(T)
+                    for ain in 1:d_a
+                        row = row_base + i
+                        col = col_base + ain
+                        amp += U[row, col] * ψν[ain]
+                    end
+                    K[sout, sin] = sqrt(T(pν)) * amp
+                end
+            end
+
+            push!(kraus, K)
+        end
+    end
+
+    return kraus
+end
+
 """
   build_superoperators(model)
 Builds the superoperator matrix which implements the n+1 evolution step:
