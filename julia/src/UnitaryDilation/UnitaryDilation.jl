@@ -5,7 +5,8 @@ using LinearAlgebra
 export 
 CollisionModel, apply_collision, extract_kraus_operators, 
 partial_traces, ptrace_ancilla, ptrace_system,
-unitary_dilation
+unitary_dilation,
+ancilla_ground_state, ancilla_thermal_qubit
 
 include("unitary_dilation.jl")
 include("extract_kraus.jl")
