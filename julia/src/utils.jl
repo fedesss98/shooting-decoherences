@@ -259,6 +259,22 @@ function kraus_from_unitary(
     return kraus
 end
 
+
+function compose_kraus(
+    kraus2::Vector{<:AbstractMatrix},
+    kraus1::Vector{<:AbstractMatrix},
+)
+    # channel 1 first, then channel 2
+    out = Matrix{eltype(kraus1[1])}[]
+    for K2 in kraus2
+        for K1 in kraus1
+            push!(out, K2 * K1)
+        end
+    end
+    return out
+end
+
+
 """
   build_superoperators(model)
 Builds the superoperator matrix which implements the n+1 evolution step:
