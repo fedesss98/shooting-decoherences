@@ -1,238 +1,183 @@
-"""
-    discrim(ρ_test, ρ₁, ρ₂)
+using LinearAlgebra
+using StatsBase
 
-Performs optimal discrimination between two reference quantum states ρ₁ and ρ₂
-given a test state ρ_test. Returns the probability that ρ_test is state i.
-
-# Arguments
-- `ρ_test`: The test density matrix to discriminate
-- `ρ₁`: First reference density matrix
-- `ρ₂`: First reference density matrix
-
-# Returns
-- `(p₁, p₂)`: Probabilities that the test state is ρ₁ or ρ₂ respectively
-
-# Algorithm
-Uses the Helstrom measurement (optimal POVM for minimum error discrimination):
-- Π₁ = projector onto positive eigenspace of (ρ₁ - ρ₂)
-- Π₂ = I - Π₁
-- Returns pᵢ = Tr(Πᵢ * ρ_test)
-"""
-function discrimin(ρ_test, ρ1, ρ2; tol=1e-10)
-  d = size(ρ_test, 1)
-  Δρ = ρ1 - ρ2
-
-  # Early exit: states are indistinguishable, return uniform
-  if norm(Δρ) < tol
-      return [0.5, 0.5]
+function _swap_unitary(ds::Int, da::Int)
+  U = zeros(ComplexF64, ds * da, ds * da)
+  for s in 1:ds
+    for a in 1:da
+      row = (a - 1) * ds + s
+      col = (s - 1) * da + a
+      U[row, col] = 1.0 + 0.0im
+    end
   end
-
-  eigen_decomp = eigen(Hermitian(Δρ))
-  eigenvalues  = eigen_decomp.values
-  eigenvectors = eigen_decomp.vectors
-
-  Π1 = zeros(ComplexF64, d, d)
-  for i in eachindex(eigenvalues)
-      if eigenvalues[i] > tol
-          v   = eigenvectors[:, i]
-          Π1 += v * v'
-      end
-  end
-  Π2 = I(d) - Π1
-
-  p1 = real(tr(Π1 * ρ_test))
-  p2 = real(tr(Π2 * ρ_test))
-
-  # Numerical sanity: p1 + p2 should be 1
-  total = p1 + p2
-  return [p1/total, p2/total]
+  return U
 end
 
-"""
-    discrim(ρ_test, ρ₁, ρ₂, ds, da; tol=1e-10)
+function discrimin(ρ_test, ρ1, ρ2, ds, da, q1::Real=0.5, q2::Real=0.5, tol=1e-10)
+  size(ρ_test) == (ds * da, ds * da) || error("ρ_test has incompatible dimensions")
+  size(ρ1) == (ds * da, ds * da) || error("ρ1 has incompatible dimensions")
+  size(ρ2) == (ds * da, ds * da) || error("ρ2 has incompatible dimensions")
 
-Performs optimal discrimination between two ancillas entangled in the 
-bipartite states ρ₁ and ρ₂, given a test subsystem state ρ_test. 
-Returns the probability that ρ_test is state i.
-
-# Arguments
-- `ρ_test`: The test density matrix to discriminate
-- `ρ₁`: First reference density matrix
-- `ρ₂`: First reference density matrix
-- `ds`: Dimension of the subsystem A (the one we trace out)
-- `da`: Dimension of the subsystem B (the one we want to discriminate)
-
-# Returns
-- `(p₁, p₂)`: Probabilities pᵢ = Tr(Πᵢ * ρ_test)
-"""
-function discrimin(ρ_test, ρ1, ρ2, ds, da; tol=1e-10)
-  # Check this is actually a bipartite state of the expected dimensions
-  size(ρ_test) == (ds*da, ds*da) || error("ρ_test has incompatible dimensions")
-  size(ρ1) == (ds*da, ds*da) || error("ρ1 has incompatible dimensions")
-  size(ρ2) == (ds*da, ds*da) || error("ρ2 has incompatible dimensions")
-  
-  # Trace out the system to get the reduced states of the ancilla
-  η = ptrace_sys(ρ_test, ds, da)
+  η_test = ptrace_sys(ρ_test, ds, da)
   η1 = ptrace_sys(ρ1, ds, da)
   η2 = ptrace_sys(ρ2, ds, da)
-
-  d = size(ρ_test, 1)
-  Δη = η1 - η2
-
-  # Early exit: states are indistinguishable, return uniform
-  if norm(Δη) < tol
-      return [0.5, 0.5]
-  end
+  Δη = q1 * η1 - q2 * η2
 
   eigen_decomp = eigen(Hermitian(Δη))
-  eigenvalues  = eigen_decomp.values
+  eigenvalues = eigen_decomp.values
   eigenvectors = eigen_decomp.vectors
 
-  Π1 = zeros(ComplexF64, d, d)
+  Π1 = zeros(ComplexF64, da, da)
   for i in eachindex(eigenvalues)
-      if eigenvalues[i] > tol
-          v   = eigenvectors[:, i]
-          Π1 += v * v'
-      end
+    if eigenvalues[i] > tol
+      v = eigenvectors[:, i]
+      Π1 += v * v'
+    end
   end
-  Π2 = I(d) - Π1
+  Π2 = I(da) - Π1
 
   p1 = real(tr(Π1 * η_test))
   p2 = real(tr(Π2 * η_test))
-
-  # Numerical sanity: p1 + p2 should be 1
-  total = p1 + p2
-  return [p1/total, p2/total]
+  total = max(p1 + p2, tol)
+  return [p1 / total, p2 / total], [Matrix(Π1), Matrix(Π2)]
 end
 
-function update_noise_history!(noise_obj)
-  M_petz, M_noise = noise_obj.supermap_petz, noise_obj.supermap_noise
-  noise_obj.supermap = M_noise * M_petz * noise_obj.supermap
+function collapse_state(ρ_SA, Π)
+  da = size(Π, 1)
+  ds = size(ρ_SA, 1) ÷ da
+  M = kron(I(ds), Π)
+  ρ_post = M * ρ_SA * M'
+  Z = max(real(tr(ρ_post)), 1e-12)
+  return ρ_post / Z
 end
 
-function measure_ancilla(η, rho, noise_options, sigma, rng)
-  ancilla_options = []
-  for option in noise_options
-    _model = CollisionModel(option.supermap, sigma)
-    _, _η = apply_collision(_model, rho)
-    push!(ancilla_options, _η)
+function collapse_map(input_state, output_state)
+  d = size(input_state, 1)
+  superop = zeros(ComplexF64, d^2, d^2)
+
+  function stochastic_projection(states_in, states_out)
+    return sum(states_out[:, i] * states_in[:, i]' for i in 1:size(states_in, 2))
   end
 
-  weights = discrimin(η, ancilla_options...)
-  @debug "Discrimination weights: $weights"
-  povm = sample(rng, [1, 2], Weights(weights))
-  return povm
+  eval_in, vec_in = eigen(Hermitian(input_state))
+  eval_out, vec_out = eigen(Hermitian(output_state))
+
+  basis = Matrix{ComplexF64}(I, d, d)
+  U1 = stochastic_projection(vec_in, basis)
+  superop .+= kron(conj(U1), U1)
+
+  if d == 2
+    p1, p2 = eval_in
+    q1, q2 = eval_out
+    if !isapprox(q1, p1; atol=1e-12)
+      if q1 < p1 && p1 > 1e-12
+        k0 = ComplexF64[sqrt(q1 / p1) 0; 0 1]
+        k1 = ComplexF64[0 0; sqrt(max(0, 1 - q1 / p1)) 0]
+        superop *= kraus_to_superop([k0, k1])
+      elseif q2 > p2 && q2 > 1e-12
+        k0 = ComplexF64[1 0; 0 sqrt(p2 / q2)]
+        k1 = ComplexF64[0 sqrt(max(0, 1 - p2 / q2)); 0 0]
+        superop *= kraus_to_superop([k0, k1])
+      end
+    end
+  end
+
+  U2 = stochastic_projection(basis, vec_out)
+  superop *= kron(conj(U2), U2)
+  return superop
 end
 
-function update_noise_guess(povm, c1, c2, noise_options)
-  # update the count of noise choices
+function update_noise_guess!(state::RecoveryState, povm::Int)
   if povm == 1
-    c1 += 1
+    push!(state.choice.c1, 1)
+    push!(state.choice.c2, 0)
+    state.choice.c1_count += 1
+  elseif povm == 2
+    push!(state.choice.c1, 0)
+    push!(state.choice.c2, 1)
+    state.choice.c2_count += 1
   else
-    c2 += 1
+    error("Invalid POVM outcome: $povm")
   end
 
-  if c1 > c2 || 10*(c1 - c2) == (povm - 2)
-    # Assume the first noise model
-    noise_guess = noise_options[1]
-  elseif c2 > c1 || 10*(c1 - c2) == (povm - 1)
-    # Assume the second noise model
-    noise_guess = noise_options[2]
+  if state.choice.c1_count > state.choice.c2_count
+    state.choice.current = 1
+  elseif state.choice.c2_count > state.choice.c1_count
+    state.choice.current = 2
+  else
+    state.choice.current = state.choice.history[end]
   end
-  return noise_guess, c1, c2
+  push!(state.choice.history, state.choice.current)
+  return nothing
 end
 
-function step_recovery!(step::Int, state::RecoveryState, config::RecoveryConfig, logs::RecoveryLogs)
-  # 0. Rename variables for readability
+function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConfig, logs::RecoveryLogs)
+  length(state.noise_options) == 2 || error("This workflow currently supports exactly 2 noise options")
+
   Ox = config.real_noise.supermap_noise
-  O1 = state.noise_options[1].supermap_noise
-  O2 = state.noise_options[2].supermap_noise
   Nx = config.real_noise.supermap
   N1 = state.noise_options[1].supermap
   N2 = state.noise_options[2].supermap
 
+  ds = 2^config.n_qubits
+  da = 2
 
-  # 1. Apply noise (create intermediate rho_ before recovery)
-  ρ_free = unvec((Ox)^step * vec(state.ρ0))
-  ρ_rec_ = unvec(Nx * vec(state.ρ0))
-  ρ1 = unvec(N1 * vec(state.ρ0))
-  ρ2 = unvec(N2 * vec(state.ρ0))
-  
-  # 2. Recovery
+  rho_free = unvec((Ox)^step * vec(state.ρ0))
+  rho_to_rec = unvec(Nx * vec(state.ρ0))
+  rho1 = unvec(N1 * vec(state.ρ0))
+  rho2 = unvec(N2 * vec(state.ρ0))
+
+  η = ancilla_thermal_qubit(config.ancilla_alpha)
+  U_swap = _swap_unitary(ds, da)
+  model = CollisionModel(U_swap, config.sigma, ds, da, ancilla_state=η)
+
+  rho_to_rec_ = apply_collision(model, rho_to_rec; ancilla_state=η, trace=false)
+  rho1_ = apply_collision(model, rho1; ancilla_state=η, trace=false)
+  rho2_ = apply_collision(model, rho2; ancilla_state=η, trace=false)
+
+  rho_to_rec_ = apply_extended_channel(rho_to_rec_, config.real_noise.kraus, ds)
+  rho1_ = apply_extended_channel(rho1_, config.real_noise.kraus, ds)
+  rho2_ = apply_extended_channel(rho2_, config.real_noise.kraus, ds)
+
+  Xi = kraus_to_superop(compose_kraus(config.real_noise.kraus, model.kraus_fwd))
+  Xi1 = kraus_to_superop(compose_kraus(state.noise_options[1].kraus, model.kraus_fwd))
+  Xi2 = kraus_to_superop(compose_kraus(state.noise_options[2].kraus, model.kraus_fwd))
+
+  q1 = state.noise_options[1].probability
+  q2 = state.noise_options[2].probability
+  w, Πs = discrimin(rho_to_rec_, rho1_, rho2_, ds, da, q1, q2)
+  povm = sample(config.rng, [1, 2], Weights(w))
+
+  rho_to_rec = ptrace_ancilla(collapse_state(rho_to_rec_, Πs[povm]), ds, da)
+  rho1 = ptrace_ancilla(collapse_state(rho1_, Πs[povm]), ds, da)
+  rho2 = ptrace_ancilla(collapse_state(rho2_, Πs[povm]), ds, da)
+
+  Cx = collapse_map(ptrace_ancilla(rho_to_rec_, ds, da), rho_to_rec)
+  C1 = collapse_map(ptrace_ancilla(rho1_, ds, da), rho1)
+  C2 = collapse_map(ptrace_ancilla(rho2_, ds, da), rho2)
+
+  Nx = Cx * Xi * Nx
+  N1 = C1 * Xi1 * N1
+  N2 = C2 * Xi2 * N2
+
+  update_noise_guess!(state, povm)
   model = CollisionModel(state.choice.current == 1 ? N1 : N2, config.sigma)
-  P = kraus_to_superop(model.kraus_rec);
+  P = kraus_to_superop(model.kraus_rec)
 
-  # Get the composite state
-  ρ_rec = apply_collision(model, ρ_rec_; trace=false)
-  model1 = CollisionModel(N1, config.sigma)
-  ρ1 = apply_collision(model1, ρ1; trace=false)
-  model2 = CollisionModel(N2, config.sigma)
-  ρ2 = apply_collision(model2, ρ2; trace=false)
+  rho_rec, _ = apply_collision(model, rho_to_rec; trace=true)
+  fid_initial = fidelity(state.ρ0, rho_rec)
+  fid_track = fidelity(state.ρ0, rho_free)
 
-  # 2a. Apply noise again only on the system
-  ρ_rec = apply_extended_channel(ρ_rec, Ox, 2^config.n_qubits)
-  ρ1 = apply_extended_channel(ρ1, O1, 2^config.n_qubits)
-  ρ2 = apply_extended_channel(ρ2, O2, 2^config.n_qubits)
-
-  # 3. Logging
-  fid_initial = fidelity(state.ρ0, ρ_rec)
-  fid_track = fidelity(state.ρ0, ρ_free)
-
-  @debug "Fidelity wrt initial state: " fid_initial
-  @debug "Fidelity of free evolution: " fid_track
-  
+  push!(logs.maps, (Nx=copy(Nx), N1=copy(N1), N2=copy(N2), P=copy(P)))
   push!(logs.ref_fidelities, fid_track)
   push!(logs.fidelities, fid_initial)
-  
-  # 4. Update noises for the next iteration
-  push!(
-    logs.maps, 
-    (Nx=copy(Nx), N1=copy(N1), N2=copy(N2), P=copy(P)))  # save superoperators at current step
-  config.real_noise.supermap = Ox * P * Nx
-  state.noise_options[1].supermap = O1 * P * N1
-  state.noise_options[2].supermap = O2 * P * N2
-  
-  # 5. Compare output ancillas still correlated with the state
-	# First, we extend the system dimensionality
-	max_d_system = 2^(3 * config.n_qubits)
-	α, α1, α2 = [embed_state(state, max_d_system) for state in (ρ_rec, ρ1, ρ2)]
-	# and normalize them with the probabilities of their respective noise channels
-	η1 = state.noise_options[1].probability * η1
-	η2 = state.noise_options[2].probability * η2
-  w = discrimin(η, η1, η2)
-  @debug "Probabilities of the POVM outputs: $w"
+  push!(logs.choice_history, state.choice.current)
 
-  povm = sample(config.rng, [1, 2], Weights(w))
-  @debug "Measurement result: $povm"
+  config.real_noise.supermap = P * Nx
+  state.noise_options[1].supermap = P * N1
+  state.noise_options[2].supermap = P * N2
 
-  # 7. Update guess for the next iteration
-  if povm == 1
-      append!(state.choice.c1, 1)
-      append!(state.choice.c2, 0)
-      state.choice.c1_count += 1
-  elseif povm == 2
-      append!(state.choice.c1, 0)
-      append!(state.choice.c2, 1)
-      state.choice.c2_count += 1
-  end
-
-  inertia = 1
-  diff = state.choice.c1_count - state.choice.c2_count
-
-  # The previous-step choice changes only if there is enough inertia in the opposing choice
-  # Positive `diff` means that c1 is leading, negative means that c2 is leading
-  if state.choice.current == 1
-      if diff <= -inertia
-          state.choice.current = 2
-      end
-  else
-      if diff >= inertia
-          state.choice.current = 1
-      end
-  end
-	append!(state.choice.current_choices, state.choice.current)
-
-  @debug "Updated choice: " new_choice=state.choice.current
-
-  return nothing 
+  return nothing
 end
+
+const step_recovery! = iterate_recovery!

@@ -2,32 +2,43 @@
 # PARAMETERS
 # name: Name of the experiment's folder where output is saved (default: "test")
 # n_qubits: Number of qubits in the system (default: 1)
-# beta: Inverse temperature for the reference state (default: 2.0)
 # dt: Time step for the evolution (default: 0.1)
 # n_timesteps: Number of time steps to evolve (default: 10)
 # n_states: Number of different initial states to test (default: 5)
+#
 # reference_state: Type of reference state (default: "thermal"):
 #   - "thermal": Use a thermal state at inverse temperature beta
-#   - "random": Use a random state in the codespace a|00...0> + b|11...1>
+#   - "random": Generate a random Density Matrix with a random spectrum
+# beta: Inverse temperature for the reference state (default: 2.0)
+#
 # recovery_type: Type of recovery experiment (default: "auto"):
 #   - "random": Use random initial states for each run
 #   - "codespace": Use random states in the codespace a|00...0> + b|11...1> mixed with sigma
 #   - "auto": Use the reference state itself as initial state
 #   - "inputstate": Use a specific input state defined by the user (default: "thermal")
+#
 # seed: Random seed for reproducibility (default: 42)
+#
 # noise_options: List of noise channels and their probabilities (default: empty list):
 #   - Each entry should be a tuple of the form (probability, noise_type, gamma)
+#   - noise_type can be:
+#       - "amplitude_damping", 
+#       - "phase_damping", 
+#       - "depolarizing", 
+#       - "bitflip"
+
+
 name            = "notebook"
 n_qubits        = 1
 beta            = 1.0
 dt              = 1.0
 n_timesteps     = 20
 n_states        = 1
-starting_state  = "random"
+starting_state  = "thermal"
 recovery_type   = "auto"
 seed            = 3
 noise_options = [
-    [0.5, "amplitude_damping", 0.2],
-    [0.5, "dephasing", 0.2]
+    [0.3, "amplitude_damping", 0.2],
+    [0.7, "depolarizing", 0.4]
 ]
 real_noise = "amplitude_damping"

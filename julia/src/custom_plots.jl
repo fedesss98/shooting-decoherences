@@ -74,9 +74,9 @@ function plot_autorecovery(state, cfg, logs; show=true, save=false, kwargs...)
     label_b = 0
     vline!(p, collect(0:length(logs.ref_fidelities)) .+ 1.2, linestyle=:dash, color=:lightgrey, lw=1, label=nothing)
 
-    for i in 1:(length(state.choice.current_choices)-1)
-        current_choice = state.choice.current_choices[i]
-        band_color = state.choice.current_choices[i] == 1 ? :lightblue : :lightgreen
+    for i in 1:(length(state.choice.history)-1)
+        current_choice = state.choice.history[i]
+        band_color = state.choice.history[i] == 1 ? :lightblue : :lightgreen
         if label_a == 0 && current_choice == 1
             label = "$(noise_labels[1]) Recovery"
             label_a += 1
@@ -100,9 +100,9 @@ function plot_autorecovery(state, cfg, logs; show=true, save=false, kwargs...)
     )
 
     if save
-        output_folder = "../experiments/$(cfg.name)/visualization/"
-        savefig(p, joinpath(output_folder, "adaptive_recovery_ampdamp_phasedamp.png"))
-        savefig(p, joinpath(output_folder, "adaptive_recovery_ampdamp_phasedamp.pdf"))
+        output_folder = joinpath(cfg.experiment_dir, "visualization")
+        savefig(p, joinpath(output_folder, "adaptive_recovery.png"))
+        savefig(p, joinpath(output_folder, "adaptive_recovery.pdf"))
     end
 
     if !show
@@ -154,7 +154,7 @@ function plot_average_fidelity(avg_fidelities, avg_ref_fidelities, state, cfg; s
     )
 
     if save
-        output_folder = "../experiments/$(cfg.name)/visualization/"
+        output_folder = joinpath(cfg.experiment_dir, "visualization")
         plot_title = infidelity ? "adaptive_recovery_infidelity_avg" : "adaptive_recovery_avg"
         savefig(p, joinpath(output_folder, "$(plot_title).png"))
         savefig(p, joinpath(output_folder, "$(plot_title).pdf"))

@@ -22,6 +22,7 @@ end
 # Static Configuration for the setup of the algorithm
 struct RecoveryConfig
     name::String
+    experiment_dir::String
     sigma::Matrix{ComplexF64}
     recovery_type::String
     real_noise::NoiseObj
@@ -31,6 +32,7 @@ struct RecoveryConfig
     seed::Int
     rng::AbstractRNG
     dt::Float64
+    ancilla_alpha::Float64
 end
 
 mutable struct ChoiceSystem
@@ -39,7 +41,7 @@ mutable struct ChoiceSystem
     c1_count::Int
     c2_count::Int
     current::Int
-    current_choices::Vector{Int}
+    history::Vector{Int}
 end
 
 # Dynamic State: Updates every iteration
@@ -59,11 +61,12 @@ const SupermapsLogged = @NamedTuple{Nx::Matrix{ComplexF64}, N1::Matrix{ComplexF6
 struct RecoveryLogs
     fidelities::Vector{Float64}
     ref_fidelities::Vector{Float64}
+    choice_history::Vector{Int}
     # This will store NamedTuples containing 4 matrices
     maps::Vector{SupermapsLogged}
 end
 # Constructor to initialize empty logs
-RecoveryLogs() = RecoveryLogs(Float64[], Float64[], SupermapsLogged[])
+RecoveryLogs() = RecoveryLogs(Float64[], Float64[], Int[], SupermapsLogged[])
 
 """
     load_configuration(config_file)
@@ -75,6 +78,7 @@ function load_configuration(config_file="./configs/config.toml")
     cfg = TOML.parsefile(config_file)
     recovery_cfg  = parse_recovery_config(cfg)
     noise_options  = parse_noise_options(cfg, recovery_cfg.sigma, recovery_cfg.dt)
+    @debug "Parsed Noise Options: " noise_options
     recovery_state = initialize_recovery_state(recovery_cfg, noise_options)
     return recovery_cfg, recovery_state, RecoveryLogs()
 end
@@ -88,6 +92,7 @@ function parse_recovery_config(cfg::Dict)::RecoveryConfig
     n_qubits      = get(cfg, "n_qubits",      1)
     beta          = get(cfg, "beta",          2.0)
     dt            = get(cfg, "dt",            0.1)
+    ancilla_alpha = get(cfg, "ancilla_alpha", 0.8)
     n_timesteps   = get(cfg, "n_timesteps",   10)
     n_states      = get(cfg, "n_states",      1)
     seed          = get(cfg, "seed",          42)
@@ -109,8 +114,8 @@ function parse_recovery_config(cfg::Dict)::RecoveryConfig
     end
 
     return RecoveryConfig(
-        name, sigma, recovery_type, real_noise,
-        n_qubits, n_timesteps, n_states, seed, rng, dt
+        name, experiment_dir, sigma, recovery_type, real_noise,
+        n_qubits, n_timesteps, n_states, seed, rng, dt, ancilla_alpha
     )
 end
 
@@ -121,6 +126,7 @@ function setup_experiment_dir(name::String, cfg::Dict)::String
 
     mkpath(joinpath(experiment_dir, "logs"))
     mkpath(joinpath(experiment_dir, "visualization"))
+    mkpath(joinpath(experiment_dir, "data"))
 
     open(joinpath(experiment_dir, "config.toml"), "w") do io
         TOML.print(io, cfg)
