@@ -17,17 +17,17 @@
 # seed: Random seed for reproducibility (default: 42)
 # noise_options: List of noise channels and their probabilities (default: empty list):
 #   - Each entry should be a tuple of the form (probability, noise_type, gamma)
-name            = "example3"
-n_qubits        = 3
+name            = "notebook"
+n_qubits        = 1
 beta            = 1.0
 dt              = 1.0
-n_timesteps     = 15
-n_states        = 150
-starting_state  = "thermal"
-recovery_type   = "codespace"
+n_timesteps     = 20
+n_states        = 1
+starting_state  = "random"
+recovery_type   = "auto"
 seed            = 3
 noise_options = [
     [0.5, "amplitude_damping", 0.2],
-    [0.5, "bitflip", 0.2]
+    [0.5, "dephasing", 0.2]
 ]
-real_noise = "bitflip"
+real_noise = "amplitude_damping"
