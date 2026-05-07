@@ -1,8 +1,8 @@
 # Configurations for the adaptive recovery protocol
 # PARAMETERS
+# name: Name of the experiment's folder where output is saved (default: "test")
 # n_qubits: Number of qubits in the system (default: 1)
 # beta: Inverse temperature for the reference state (default: 2.0)
-# gamma: Coupling strength (default: 1.0)
 # dt: Time step for the evolution (default: 0.1)
 # n_timesteps: Number of time steps to evolve (default: 10)
 # n_states: Number of different initial states to test (default: 5)
@@ -10,22 +10,24 @@
 #   - "thermal": Use a thermal state at inverse temperature beta
 #   - "random": Use a random state in the codespace a|00...0> + b|11...1>
 # recovery_type: Type of recovery experiment (default: "auto"):
-#   - "iterative": Use random initial states for each run
+#   - "random": Use random initial states for each run
+#   - "codespace": Use random states in the codespace a|00...0> + b|11...1> mixed with sigma
 #   - "auto": Use the reference state itself as initial state
+#   - "inputstate": Use a specific input state defined by the user (default: "thermal")
 # seed: Random seed for reproducibility (default: 42)
-# noise_probabilities: List of noise channels and their probabilities (default: empty list):
+# noise_options: List of noise channels and their probabilities (default: empty list):
 #   - Each entry should be a tuple of the form (probability, noise_type, gamma)
-name            = "1qubit_random_autorecovery"
-n_qubits        = 1
-beta            = 2.0
-# gamma1           = 1.0
+name            = "example3"
+n_qubits        = 3
+beta            = 1.0
 dt              = 1.0
-n_timesteps     = 20
-n_states        = 30
-starting_state  = "random"
-recovery_type   = "auto"
-seed            = -1
-noise_probabilities = [
-    [0.4, "amplitude_damping", 0.1],
-    [0.6, "phase_damping", 0.1]
+n_timesteps     = 15
+n_states        = 150
+starting_state  = "thermal"
+recovery_type   = "codespace"
+seed            = 3
+noise_options = [
+    [0.5, "amplitude_damping", 0.2],
+    [0.5, "bitflip", 0.2]
 ]
+real_noise = "bitflip"

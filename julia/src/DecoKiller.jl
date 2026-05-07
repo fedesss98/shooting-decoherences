@@ -6,9 +6,9 @@ export
 PetzMaps,
 get_kraus_operators, 
 # initial configuration objects
-load_configuration, RecoveryConfig, RecoveryState, RecoveryLogs, NoiseObj,
+load_configuration, RecoveryConfig, RecoveryState, RecoveryLogs, NoiseObj, ChoiceSystem,
 # initial states
-codespace_state, thermal_state, random_state,
+codespace_state, codespace_dm, thermal_state, random_state, input_state,
 apply_channel, recovery_map, rand_state_with_spectrum,
 # metrics
 fidelity, overlap,
@@ -16,8 +16,8 @@ partial_traces,
 UnitaryDilation,
 CollisionModel, apply_collision, extract_kraus_operators,
 # main function
-run_experiment, discrimin, update_noise_history!, measure_ancilla, update_noise_guess, step_recovery!
-
+run_experiment, discrimin, update_noise_history!, 
+measure_ancilla, update_noise_guess, reset_initial_state!, step_recovery!
 
 include("PetzMaps.jl")
 include("UnitaryDilation/UnitaryDilation.jl")
@@ -35,6 +35,36 @@ include("configurations.jl")
 include("adaptive_recovery.jl")
 
 
+function reset_initial_state!(state::RecoveryState, cfg::RecoveryConfig)
+    if cfg.recovery_type == "random"
+        ψ0 = random_state(cfg.n_qubits)
+        ρ0 = ψ0 * ψ0'
+        state.ρ0 .= ρ0
+        state.ρ_free .= ρ0
+        state.ρ_rec .= ρ0
+    elseif cfg.recovery_type == "codespace"
+        sigma = cfg.sigma
+        p = rand(cfg.rng)
+        max_x = p * (1-p)  # Maximum allowed magnitude for |x|^2
+        radius = sqrt(rand(cfg.rng) * max_x)
+        x = radius * exp(2π * im * rand(cfg.rng))
+        ρ = codespace_dm(cfg.n_qubits, p, x)
+        ρ0 = ρ + sigma
+        ρ0 = ρ0 / tr(ρ0)  # Normalize to ensure it's a valid density matrix
+        state.ρ0 .= ρ0
+        state.ρ_free .= ρ0
+        state.ρ_rec .= ρ0
+    elseif cfg.recovery_type == "inputstate"
+        a, b = rand(cfg.rng, 2)
+        ψ0 = input_state(cfg.n_qubits, a, b)
+        ρ0 = ψ0 * ψ0'
+        state.ρ0 .= ρ0
+        state.ρ_free .= ρ0
+        state.ρ_rec .= ρ0
+    end
+end
+
+
 function run_experiment(config_file="./configs/config.toml")
     cfg, state, logs = load_configuration(config_file)
     
@@ -44,13 +74,7 @@ function run_experiment(config_file="./configs/config.toml")
     p_states = Progress(cfg.n_states, desc="Adaptive Recovery ")
     for s in 1:cfg.n_states
         initial_state = deepcopy(state)  # Reset state for each run
-        if cfg.recovery_type == "random"
-            ψ0 = random_state(cfg.n_qubits)
-            ρ0 = ψ0 * ψ0'
-            initial_state.ρ0 .= ρ0
-            initial_state.ρ_free .= ρ0
-            initial_state.ρ_rec .= ρ0
-        end
+        reset_initial_state!(initial_state, cfg)
 
         # Setup the progress bar for one state evolution
         p_time = Progress(

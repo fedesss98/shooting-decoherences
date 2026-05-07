@@ -234,10 +234,10 @@ function get_kraus_operators(noise, gamma, t)
     return get_amplitudedamping_operators(gamma, t)
   elseif noise == "phase_damping"
     return get_phasedamping_operators(gamma, t)
-  elseif noise == "dephasing"
-    return get_dephasing_operators(gamma, t)
   elseif noise == "bitflip"
     return get_bitflip_operators(gamma, t)
+  elseif noise == "depolarizing"
+    return get_depolarizing_operators(gamma, t)
   else
     error("Unknown noise model: $noise")
   end
@@ -248,4 +248,17 @@ function unvec(state)
   dims = Int(sqrt(size(state, 1)))
 
   return reshape(state, dims, dims)
+end
+
+"""
+  embed_state(ρ, d_target)
+Embed a density matrix ρ into a larger Hilbert space of dimension d_target by padding with zeros.
+This is used to match the dimensions of the ancilla when performing discrimination or recovery.
+"""
+function embed_state(ρ, d_target)
+    d = size(ρ, 1)
+    d == d_target && return ρ
+    ρ_out = zeros(ComplexF64, d_target, d_target)
+    ρ_out[1:d, 1:d] = ρ
+    return ρ_out
 end

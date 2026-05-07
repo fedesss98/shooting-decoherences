@@ -18,32 +18,34 @@ Uses the Helstrom measurement (optimal POVM for minimum error discrimination):
 - Π₂ = I - Π₁
 - Returns pᵢ = Tr(Πᵢ * ρ_test)
 """
-function discrimin(ρ_test, ρ1, ρ2)
-    # Compute the difference of density matrices
+function discrimin(ρ_test, ρ1, ρ2; tol=1e-10)
+    d = size(ρ_test, 1)
     Δρ = ρ1 - ρ2
-    
-    # Diagonalize to find eigenvalues and eigenvectors
+
+    # Early exit: states are indistinguishable, return uniform
+    if norm(Δρ) < tol
+        return [0.5, 0.5]
+    end
+
     eigen_decomp = eigen(Hermitian(Δρ))
-    eigenvalues = eigen_decomp.values
+    eigenvalues  = eigen_decomp.values
     eigenvectors = eigen_decomp.vectors
-    
-    # Construct Π₁: projector onto positive eigenspace
-    Π1 = zeros(ComplexF64, size(ρ1))
+
+    Π1 = zeros(ComplexF64, d, d)
     for i in eachindex(eigenvalues)
-        if eigenvalues[i] > 1e-10  # positive eigenvalue (with numerical tolerance)
-            v = eigenvectors[:, i]
-            Π1 += v * v'  # Add rank-1 projector |v⟩⟨v|
+        if eigenvalues[i] > tol
+            v   = eigenvectors[:, i]
+            Π1 += v * v'
         end
     end
-    
-    # Construct Π₂: complement projector
-    Π2 = I - Π1
-    
-    # Compute probabilities
+    Π2 = I(d) - Π1
+
     p1 = real(tr(Π1 * ρ_test))
     p2 = real(tr(Π2 * ρ_test))
-    
-    return [p1, p2]
+
+    # Numerical sanity: p1 + p2 should be 1
+    total = p1 + p2
+    return [p1/total, p2/total]
 end
 
 function update_noise_history!(noise_obj)
@@ -84,49 +86,90 @@ function update_noise_guess(povm, c1, c2, noise_options)
 end
 
 function step_recovery!(step::Int, state::RecoveryState, config::RecoveryConfig, logs::RecoveryLogs)
+  # 0. Rename variables for readability
+  Ox = config.real_noise.supermap_noise
+  O1 = state.noise_options[1].supermap_noise
+  O2 = state.noise_options[2].supermap_noise
+  Nx = config.real_noise.supermap
+  N1 = state.noise_options[1].supermap
+  N2 = state.noise_options[2].supermap
 
-    # 0. Setup models
-    M_petz = state.noise_guess.supermap_petz
-    M_noise = state.noise_guess.supermap_noise
-    # Update M_total
-    if step > 1
-        state.M_total = (M_noise * M_petz) * state.M_total
-    end
-    model = CollisionModel(state.M_total, config.sigma)
-    
-    # 1. Apply noise (update rho1 and create intermediate rho2_)
-    state.ρ_free = apply_channel(config.real_noise.kraus, state.ρ_free, config.n_qubits)
-    ρ_rec_ = apply_channel(config.real_noise.kraus, state.ρ_rec, config.n_qubits)
-    
-    # 2. Recovery
-    # Update rho2 in the state struct
-    state.ρ_rec, η = apply_collision(model, ρ_rec_)
-    
-    # 3. Logging
-    fid_initial = fidelity(state.ρ0, state.ρ_rec)
-    fid_ref = fidelity(config.sigma, state.ρ_rec)
-    fid_track = fidelity(state.ρ0, state.ρ_free)
 
-    @debug "Fidelity wrt initial state: $fid_initial"
-    @debug "Fidelity wrt reference state: $fid_ref"
-    @debug "Fidelity of free evolution: $fid_track"
-    
-    push!(logs.ref_fidelities, fid_track)
-    push!(logs.fidelities, fid_initial)
-    
-    # 4. Measure Ancilla and Update Guess
-    if step > 1
-        for option in state.noise_options
-            update_noise_history!(option)
-        end
-    end
-    povm = measure_ancilla(η, ρ_rec_, state.noise_options, config.sigma, config.rng)
-    @debug "Measure output: $povm"
-    
-    # Update the remaining state variables
-    state.noise_guess, state.c1, state.c2 = update_noise_guess(
-        povm, state.c1, state.c2, state.noise_options)
-    @debug "Updated noise guess:\t$(state.noise_guess.name)"
+  # 1. Apply noise (create intermediate rho_ before recovery)
+  ρ_free = unvec((Ox)^step * vec(state.ρ0))
+  ρ_rec_ = unvec(Nx * vec(state.ρ0))
+  ρ1 = unvec(N1 * vec(state.ρ0))
+  ρ2 = unvec(N2 * vec(state.ρ0))
+  
+  # 2. Recovery
+  model = CollisionModel(state.choice.current == 1 ? N1 : N2, config.sigma)
+  P = kraus_to_superop(model.kraus_rec);
 
-    return nothing 
+  ρ_rec, η = apply_collision(model, ρ_rec_)
+  model1 = CollisionModel(N1, config.sigma)
+  ρ1, η1 = apply_collision(model1, ρ1)
+  model2 = CollisionModel(N2, config.sigma)
+  ρ2, η2 = apply_collision(model2, ρ2)
+
+  # 3. Logging
+  fid_initial = fidelity(state.ρ0, ρ_rec)
+  fid_track = fidelity(state.ρ0, ρ_free)
+
+  @debug "Fidelity wrt initial state: " fid_initial
+  @debug "Fidelity of free evolution: " fid_track
+  
+  push!(logs.ref_fidelities, fid_track)
+  push!(logs.fidelities, fid_initial)
+  
+  # 4. Update noises for the next iteration
+  push!(
+    logs.maps, 
+    (Nx=copy(Nx), N1=copy(N1), N2=copy(N2), P=copy(P)))  # save superoperators at current step
+  config.real_noise.supermap = Ox * P * Nx
+  state.noise_options[1].supermap = O1 * P * N1
+  state.noise_options[2].supermap = O2 * P * N2
+  
+  # 5. Compare output ancillas
+	# First, we extend the ancillas dimensionality
+	max_d_ancillas = 4^config.n_qubits
+	η, η1, η2 = [embed_state(ancilla, max_d_ancillas) for ancilla in (η, η1, η2)]
+	# and normalize them with the probabilities of their respective noise channels
+	η1 = state.noise_options[1].probability * η1
+	η2 = state.noise_options[2].probability * η2
+  w = discrimin(η, η1, η2)
+  @debug "Probabilities of the POVM outputs: $w"
+
+  povm = sample(config.rng, [1, 2], Weights(w))
+  @debug "Measurement result: $povm"
+
+  # 7. Update guess for the next iteration
+  if povm == 1
+      append!(state.choice.c1, 1)
+      append!(state.choice.c2, 0)
+      state.choice.c1_count += 1
+  elseif povm == 2
+      append!(state.choice.c1, 0)
+      append!(state.choice.c2, 1)
+      state.choice.c2_count += 1
+  end
+
+  inertia = 1
+  diff = state.choice.c1_count - state.choice.c2_count
+
+  # The previous-step choice changes only if there is enough inertia in the opposing choice
+  # Positive `diff` means that c1 is leading, negative means that c2 is leading
+  if state.choice.current == 1
+      if diff <= -inertia
+          state.choice.current = 2
+      end
+  else
+      if diff >= inertia
+          state.choice.current = 1
+      end
+  end
+	append!(state.choice.current_choices, state.choice.current)
+
+  @debug "Updated choice: " new_choice=state.choice.current
+
+  return nothing 
 end

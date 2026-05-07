@@ -2,6 +2,8 @@ visualization/
 *.png
 .vscode/
 config_bb84.toml
+experiments/
+logs/
 
 # ============================================ #
 # Python defaults
