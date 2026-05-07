@@ -16,6 +16,7 @@ function NoiseObj(noise::String, p::Float64, sigma::Matrix{T}, gamma::Float64, t
   n_qubits = Int(log2(size(sigma, 1)))
   model = CollisionModel(kraus, sigma, n=n_qubits)
   M_petz, M_noise = build_superoperators(model)
+  M_noise = kraus_to_superop(kraus)
   return NoiseObj(noise, p, kraus, M_petz, M_noise, M_noise)
 end
 
@@ -141,6 +142,8 @@ function make_reference_state(kind::String, n_qubits::Int, beta::Float64, rng)
     elseif kind == "random"
         spectrum = 0.1 .+ 0.9 .* rand(rng, 2^n_qubits)
         return rand_state_with_spectrum(spectrum; rng=rng)
+    elseif kind == "codespace"
+        return codespace_dm(n_qubits, 0.6, 0.4)
     else
         throw(ArgumentError("Unsupported starting state: $kind"))
     end

@@ -9,6 +9,7 @@
 # reference_state: Type of reference state (default: "thermal"):
 #   - "thermal": Use a thermal state at inverse temperature beta
 #   - "random": Generate a random Density Matrix with a random spectrum
+#   - "codespace": Use a state in the codespace a|00...0> + b|11...1> mixed with sigma
 # beta: Inverse temperature for the reference state (default: 2.0)
 #
 # recovery_type: Type of recovery experiment (default: "auto"):
@@ -32,13 +33,15 @@ name            = "notebook"
 n_qubits        = 1
 beta            = 1.0
 dt              = 1.0
-n_timesteps     = 20
+n_timesteps     = 25
 n_states        = 1
-starting_state  = "thermal"
-recovery_type   = "auto"
-seed            = 3
+starting_state  = "codespace"
+recovery_type   = "codespace"
+ancilla_alpha   = 1.0
+# seed            = 7697
+seed            = 346
 noise_options = [
     [0.3, "amplitude_damping", 0.2],
-    [0.7, "depolarizing", 0.4]
+    [0.7, "phase_damping", 0.4],
 ]
 real_noise = "amplitude_damping"
