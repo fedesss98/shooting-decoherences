@@ -58,7 +58,6 @@ Create a full-rank density matrix for n_qubits
 function fullrank_state(n_qubits)
     Random.seed!(1234)
     coeffs = normalize(randn(Float64, 2^n_qubits))
-    println(coeffs)
     r = zeros(ComplexF64, 2^n_qubits, 2^n_qubits)
     for (i, c) in enumerate(coeffs)
         psi = zeros(ComplexF64, 2^n_qubits)
