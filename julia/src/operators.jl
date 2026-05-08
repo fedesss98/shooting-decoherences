@@ -90,7 +90,7 @@ end
 Applies the amplitude damping channel for all n qubits in the system sequentially.
 Optionally acts as the identity in the last subspace with dimentions `extra_dims`.
 """
-function apply_channel2(kraus, ρ, n_qubits::Int; extra_dims::Int=0)
+function apply_channel(kraus, ρ, n_qubits::Int; extra_dims::Int=0)
     ρi = copy(ρ)
     
     if n_qubits == 1
