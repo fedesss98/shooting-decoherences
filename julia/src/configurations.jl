@@ -16,7 +16,6 @@ function NoiseObj(noise::String, p::Float64, sigma::Matrix{T}, gamma::Float64, t
   n_qubits = Int(log2(size(sigma, 1)))
   model = CollisionModel(kraus, sigma, n=n_qubits)
   M_petz, M_noise = build_superoperators(model)
-  M_noise = kraus_to_superop(kraus)
   return NoiseObj(noise, p, kraus, M_petz, M_noise, M_noise)
 end
 
