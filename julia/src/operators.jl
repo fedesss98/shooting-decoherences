@@ -86,10 +86,11 @@ function apply_channel(kraus, ρ)
 end
 
 """
-    apply_channel(kraus, ρ, n_qubits)
-Applies the amplitude damping channel for all n qubits in the system sequentially
+    apply_channel(kraus, ρ, n_qubits; extra_dims=0)
+Applies the amplitude damping channel for all n qubits in the system sequentially.
+Optionally acts as the identity in the last subspace with dimentions `extra_dims`.
 """
-function apply_channel(kraus, ρ, n_qubits::Int)
+function apply_channel2(kraus, ρ, n_qubits::Int; extra_dims::Int=0)
     ρi = copy(ρ)
     
     if n_qubits == 1
@@ -100,7 +101,10 @@ function apply_channel(kraus, ρ, n_qubits::Int)
         ρf = zeros(ComplexF64, size(ρ))
         for k in kraus
             # Extend the Kraus operator
-            op_list = [i == qubit ? k : I2 for i in 1:n_qubits]
+            op_list = [i == qubit ? k : I(2) for i in 1:n_qubits]
+            if extra_dims > 0
+              push!(op_list, I(extra_dims))
+            end
             k_full = foldl(kron, op_list)
 
             ρf += k_full * ρi * k_full'
