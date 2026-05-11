@@ -213,6 +213,18 @@ end
 
 using LinearAlgebra
 
+function _swap_unitary(ds::Int, da::Int)
+  U = zeros(ComplexF64, ds * da, ds * da)
+  for s in 1:ds
+    for a in 1:da
+      row = (a - 1) * ds + s
+      col = (s - 1) * da + a
+      U[row, col] = 1.0 + 0.0im
+    end
+  end
+  return U
+end
+
 function kraus_from_unitary(
     U::AbstractMatrix{T},
     d_s::Int,

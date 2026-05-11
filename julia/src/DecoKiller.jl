@@ -124,6 +124,8 @@ function save_results!(cfg::RecoveryConfig, state::RecoveryState, logs::Recovery
         "seed" => cfg.seed,
         "real_noise" => cfg.real_noise.name,
         "noise_options" => [n.name for n in state.noise_options],
+        "ancilla_state" => cfg.ancilla_state_name,
+        "collision_unitary" => cfg.collision_unitary_name,
         "fidelities" => logs.fidelities,
         "ref_fidelities" => logs.ref_fidelities,
         "choice_history" => logs.choice_history,
