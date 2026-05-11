@@ -27,6 +27,13 @@
 #       - "phase_damping", 
 #       - "depolarizing", 
 #       - "bitflip"
+#
+# collision_unitary: Named joint system-ancilla unitary built at initialization:
+#   - "swap": swap-like collision between the system and the configured ancilla
+#
+# ancilla_state: Named ancilla input state built at initialization:
+#   - "thermal_qubit": diag(ancilla_alpha, 1 - ancilla_alpha)
+#   - "ground_qubit": |0><0|
 
 
 name            = "notebook"
@@ -37,11 +44,13 @@ n_timesteps     = 25
 n_states        = 1
 starting_state  = "codespace"
 recovery_type   = "codespace"
+collision_unitary = "swap"
+ancilla_state   = "thermal_qubit"
 ancilla_alpha   = 1.0
 # seed            = 7697
-seed            = 346
+seed            = 2435
 noise_options = [
-    [0.3, "amplitude_damping", 0.2],
-    [0.7, "phase_damping", 0.4],
+    [0.5, "amplitude_damping", 0.2],
+    [0.5, "phase_damping", 0.4],
 ]
 real_noise = "amplitude_damping"
