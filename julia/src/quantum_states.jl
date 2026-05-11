@@ -76,8 +76,8 @@ function thermal_state(n, beta)
     q = zeros(ComplexF64, 2^n, 2^n)
     for i in 1:n
         for j in 1:i-1
-            σz_i = foldl(kron, [k == i ? σz : I2 for k in 1:n])
-            σz_j = foldl(kron, [k == j ? σz : I2 for k in 1:n])
+            σz_i = foldl(kron, [k == i ? σz : I(2) for k in 1:n])
+            σz_j = foldl(kron, [k == j ? σz : I(2) for k in 1:n])
             q += σz_i * σz_j
         end
     end
