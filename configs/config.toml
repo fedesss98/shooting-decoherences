@@ -37,20 +37,20 @@
 
 
 name            = "notebook"
-n_qubits        = 1
+n_qubits        = 2
 beta            = 1.0
 dt              = 1.0
 n_timesteps     = 25
 n_states        = 1
 starting_state  = "codespace"
-recovery_type   = "codespace"
+recovery_type   = "auto"
 collision_unitary = "swap"
 ancilla_state   = "thermal_qubit"
 ancilla_alpha   = 1.0
 # seed            = 7697
 seed            = 2435
 noise_options = [
-    [0.5, "amplitude_damping", 0.2],
-    [0.5, "phase_damping", 0.4],
+    [0.7, "amplitude_damping", 0.2],
+    [0.3, "phase_damping", 0.4],
 ]
-real_noise = "amplitude_damping"
+real_noise = "phase_damping"
