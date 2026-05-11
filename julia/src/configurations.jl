@@ -109,7 +109,7 @@ function parse_recovery_config(cfg::Dict)::RecoveryConfig
         println("No real noise specified in config, sampling from noise options...")
         real_noise = sample_real_noise(rng, noise_options)
     else
-        println("Using specified real noise from config...")
+        println("Using specified real noise from config: $(cfg["real_noise"])")
         real_noise = [n for n in noise_options if n.name == cfg["real_noise"]][1]
     end
 
