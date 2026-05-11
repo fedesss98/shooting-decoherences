@@ -86,6 +86,38 @@ function apply_channel(kraus, ρ)
 end
 
 """
+    expand_kraus_operators(kraus, n_qubits)
+
+Return Kraus operators acting on the full n-qubit system. Single-qubit
+operators are expanded as independent tensor-product noises on every qubit.
+Operators already acting on the full system are returned unchanged.
+"""
+function expand_kraus_operators(kraus, n_qubits::Int)
+    target_dim = 2^n_qubits
+    op_dim = size(kraus[1], 1)
+
+    all(size(K) == (op_dim, op_dim) for K in kraus) ||
+        throw(ArgumentError("All Kraus operators must have the same square dimension"))
+
+    if op_dim == target_dim
+        return [Matrix{ComplexF64}(K) for K in kraus]
+    elseif op_dim != 2
+        throw(ArgumentError("Kraus operators have dimension $op_dim, expected 2 or $target_dim"))
+    end
+
+    expanded = Matrix{ComplexF64}[]
+    for idx in Iterators.product([eachindex(kraus) for _ in 1:n_qubits]...)
+        K = Matrix{ComplexF64}(kraus[idx[1]])
+        for i in 2:n_qubits
+            K = kron(K, kraus[idx[i]])
+        end
+        push!(expanded, K)
+    end
+
+    return expanded
+end
+
+"""
     apply_channel(kraus, ρ, n_qubits; extra_dims=0)
 Applies the amplitude damping channel for all n qubits in the system sequentially.
 Optionally acts as the identity in the last subspace with dimentions `extra_dims`.

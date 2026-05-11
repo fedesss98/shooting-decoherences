@@ -7,6 +7,7 @@ mutable struct NoiseObj
   name::String
   probability::Float64
   kraus::Vector{Matrix{ComplexF64}}
+  extended_kraus::Vector{Matrix{ComplexF64}}
   supermap_petz::Matrix{ComplexF64}
   supermap_noise::Matrix{ComplexF64}
   supermap::Matrix{ComplexF64}
@@ -14,9 +15,10 @@ end
 function NoiseObj(noise::String, p::Float64, sigma::Matrix{T}, gamma::Float64, t::Float64) where T
   kraus = get_kraus_operators(noise, gamma, t)
   n_qubits = Int(log2(size(sigma, 1)))
-  model = CollisionModel(kraus, sigma, n=n_qubits)
+  extended_kraus = expand_kraus_operators(kraus, n_qubits)
+  model = CollisionModel(extended_kraus, sigma)
   M_petz, M_noise = build_superoperators(model)
-  return NoiseObj(noise, p, kraus, M_petz, M_noise, M_noise)
+  return NoiseObj(noise, p, kraus, extended_kraus, M_petz, M_noise, M_noise)
 end
 
 # Static Configuration for the setup of the algorithm
