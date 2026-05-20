@@ -30,6 +30,7 @@
 #
 # collision_unitary: Named joint system-ancilla unitary built at initialization:
 #   - "swap": swap-like collision between the system and the configured ancilla
+#   - "exchange": Jaynes-Cummings-like interaction with a multi-qubit system
 #
 # ancilla_state: Named ancilla input state built at initialization:
 #   - "thermal_qubit": diag(ancilla_alpha, 1 - ancilla_alpha)
@@ -41,16 +42,16 @@ n_qubits        = 2
 beta            = 1.0
 dt              = 1.0
 n_timesteps     = 25
-n_states        = 1
-starting_state  = "codespace"
-recovery_type   = "auto"
-collision_unitary = "swap"
+n_states        = 100
+starting_state  = "thermal"
+recovery_type   = "codespace"
+collision_unitary = "jc"
 ancilla_state   = "thermal_qubit"
-ancilla_alpha   = 1.0
+ancilla_alpha   = 0.8
 # seed            = 7697
-seed            = 2435
+seed            = 7698
 noise_options = [
-    [0.7, "amplitude_damping", 0.2],
-    [0.3, "phase_damping", 0.4],
+    [0.5, "amplitude_damping", 1.0],
+    [0.5, "phase_damping", 1.0],
 ]
-real_noise = "phase_damping"
+real_noise = "amplitude_damping"
