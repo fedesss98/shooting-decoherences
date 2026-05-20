@@ -380,13 +380,29 @@ since it does not affect the result).
 The function also includes checks to ensure that R is a valid transport plan
 (non-negative and with correct marginals), and that T is a valid stochastic matrix.
 """
-function stochastic_transition(p, q; A=nothing, tol=1e-12)
+function stochastic_transition(p, q; A=nothing, tol=1e-12, checktol=1e-8)
+    p = collect(float.(p))
+    q = collect(float.(q))
+
+    # Normalize defensively
+    p ./= sum(p)
+    q ./= sum(q)
+
     n = length(p)
     m = length(q)
 
     if A === nothing
         A = zeros(m, n)
+    else
+        A = copy(float.(A))
     end
+
+    # Project A so that its row and column sums vanish
+    rowA = sum(A, dims=2)              # m × 1
+    colA = sum(A, dims=1)              # 1 × n
+    totalA = sum(A)
+
+    A .= A .- rowA ./ n .- colA ./ m .+ totalA / (m * n)
 
     R = q * p' + A
 
@@ -397,12 +413,15 @@ function stochastic_transition(p, q; A=nothing, tol=1e-12)
         error("Invalid transport plan: some entries of R are negative.")
     end
 
+    # Optional clipping after negativity check
+    R .= max.(R, 0.0)
+
     # Check marginals
-    if maximum(abs.(sum(R, dims=1)[:] .- p)) > 1e-8
+    if maximum(abs.(sum(R, dims=1)[:] .- p)) > checktol
         error("Invalid transport plan: column sums of R are not p.")
     end
 
-    if maximum(abs.(sum(R, dims=2)[:] .- q)) > 1e-8
+    if maximum(abs.(sum(R, dims=2)[:] .- q)) > checktol
         error("Invalid transport plan: row sums of R are not q.")
     end
 
@@ -419,6 +438,16 @@ function stochastic_transition(p, q; A=nothing, tol=1e-12)
 
     # Numerical cleanup
     T[abs.(T) .< tol] .= 0.0
+
+    # Defensive column normalization
+    for i in 1:n
+        s = sum(T[:, i])
+        if s > tol
+            T[:, i] ./= s
+        else
+            T[:, i] .= q
+        end
+    end
 
     return T
 end
