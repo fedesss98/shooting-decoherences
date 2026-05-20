@@ -57,5 +57,5 @@ noise_options = [
     [0.5, "bitflip", 1.0],
     [0.5, "phase_damping", 1.0],
 ]
-real_noise = "amplitude_damping"
+real_noise = "bitflip"
 correlated_noise = true
