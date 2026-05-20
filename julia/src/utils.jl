@@ -446,3 +446,18 @@ function kraus_from_transition(T)
 
     return Ks
 end
+
+function clean_eigenvalues(eigvals, tol=1e-10)
+    cleaned = similar(eigvals)
+    for i in eachindex(eigvals)
+        val = real(eigvals[i])
+        if abs(val) < tol
+            cleaned[i] = 0.0
+        elseif val < 0
+            cleaned[i] = 0.0
+        else
+            cleaned[i] = val
+        end
+    end
+    return cleaned
+  end
