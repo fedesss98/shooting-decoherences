@@ -368,3 +368,81 @@ function embed_state(ρ, d_target)
     ρ_out[1:d, 1:d] = ρ
     return ρ_out
 end
+
+"""
+  stochastic_transition(p, q; A=nothing, tol=1e-12)
+Given two probability distributions p and q, construct a stochastic transition matrix T such that T*p = q.
+This is done by first constructing a transport plan R = q*p' + A, 
+where A is an optional adjustment matrix to ensure positivity and stability.
+Then, T is obtained by normalizing the columns of R by p. 
+If p[i] is zero, the corresponding column of T is set to q (arbitrary stochastic column, 
+since it does not affect the result).
+The function also includes checks to ensure that R is a valid transport plan
+(non-negative and with correct marginals), and that T is a valid stochastic matrix.
+"""
+function stochastic_transition(p, q; A=nothing, tol=1e-12)
+    n = length(p)
+    m = length(q)
+
+    if A === nothing
+        A = zeros(m, n)
+    end
+
+    R = q * p' + A
+
+    # Clean tiny numerical noise
+    R[abs.(R) .< tol] .= 0.0
+
+    if any(R .< -tol)
+        error("Invalid transport plan: some entries of R are negative.")
+    end
+
+    # Check marginals
+    if maximum(abs.(sum(R, dims=1)[:] .- p)) > 1e-8
+        error("Invalid transport plan: column sums of R are not p.")
+    end
+
+    if maximum(abs.(sum(R, dims=2)[:] .- q)) > 1e-8
+        error("Invalid transport plan: row sums of R are not q.")
+    end
+
+    T = zeros(m, n)
+
+    for i in 1:n
+        if p[i] > tol
+            T[:, i] = R[:, i] ./ p[i]
+        else
+            # Arbitrary stochastic column, because this column does not affect E(alpha)
+            T[:, i] = q
+        end
+    end
+
+    # Numerical cleanup
+    T[abs.(T) .< tol] .= 0.0
+
+    return T
+end
+
+
+"""
+  kraus_from_transition(T)
+Given a stochastic transition matrix T, construct a set of Kraus operators that implement the corresponding quantum channel. 
+Each non-zero entry T[j, i] corresponds to a Kraus operator K_ji = sqrt(T[j, i]) |j⟩⟨i|, 
+where |i⟩ and |j⟩ are the standard basis states of the input and output Hilbert spaces, respectively.
+"""
+function kraus_from_transition(T)
+    m, n = size(T)
+    Ks = Matrix{Float64}[]
+
+    for j in 1:m
+        for i in 1:n
+            if T[j, i] > 0
+                K = zeros(m, n)
+                K[j, i] = sqrt(T[j, i])
+                push!(Ks, K)
+            end
+        end
+    end
+
+    return Ks
+end
