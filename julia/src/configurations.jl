@@ -173,7 +173,11 @@ function parse_recovery_config(cfg::Dict)::RecoveryConfig
         real_noise = sample_real_noise(rng, noise_options)
     else
         println("Using specified real noise from config: $(cfg["real_noise"])\n")
-        real_noise = [n for n in noise_options if n.name == cfg["real_noise"]][1]
+        real_noise_idx = findfirst(n -> n.name == cfg["real_noise"], noise_options)
+        if real_noise_idx === nothing
+            throw(ArgumentError("Specified real noise '$(cfg["real_noise"])' not found in noise options"))
+        end
+        real_noise = noise_options[real_noise_idx]
     end
 
     return RecoveryConfig(
@@ -222,7 +226,7 @@ const DEFAULT_NOISE_OPTIONS = [
 function parse_noise_options(cfg::Dict, sigma, dt::Float64)::Vector{NoiseObj}
     raw = get(cfg, "noise_options", DEFAULT_NOISE_OPTIONS)
     correlated_noise = get(cfg, "correlated_noise", false)
-    return [NoiseObj(name, prob, sigma, gamma, dt; correlated_noise=correlated_noise)
+    return [NoiseObj(name, prob, sigma, gamma, dt; correlated=correlated_noise)
             for (prob, name, gamma) in raw]
 end
 
