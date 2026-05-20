@@ -40,6 +40,7 @@ struct RecoveryConfig
     collision_unitary_name::String
     ancilla_state::Matrix{ComplexF64}
     collision_unitary::Matrix{ComplexF64}
+    correlated_noise::Bool
 end
 
 function RecoveryConfig(
@@ -57,6 +58,7 @@ function RecoveryConfig(
     ancilla_alpha::Float64;
     ancilla_state_name::String="thermal_qubit",
     collision_unitary_name::String="swap",
+    correlated_noise::Bool=false,
 )
     ancilla_state = make_ancilla_state(ancilla_state_name, ancilla_alpha)
     collision_unitary = make_collision_unitary(
@@ -68,7 +70,7 @@ function RecoveryConfig(
     return RecoveryConfig(
         name, experiment_dir, sigma, recovery_type, real_noise,
         n_qubits, n_timesteps, n_states, seed, rng, dt, ancilla_alpha,
-        ancilla_state_name, collision_unitary_name, ancilla_state, collision_unitary,
+        ancilla_state_name, collision_unitary_name, ancilla_state, collision_unitary, correlated_noise
     )
 end
 
@@ -158,6 +160,7 @@ function parse_recovery_config(cfg::Dict)::RecoveryConfig
     seed          = get(cfg, "seed",          42)
     recovery_type = get(cfg, "recovery_type", "auto")
     starting_state = get(cfg, "starting_state", "thermal")
+    correlated_noise = get(cfg, "correlated_noise", false)
 
     rng           = make_rng(seed)
     experiment_dir = setup_experiment_dir(name, cfg)
@@ -178,6 +181,7 @@ function parse_recovery_config(cfg::Dict)::RecoveryConfig
         n_qubits, n_timesteps, n_states, seed, rng, dt, ancilla_alpha;
         ancilla_state_name=ancilla_state_name,
         collision_unitary_name=collision_unitary_name,
+        correlated_noise=correlated_noise
     )
 end
 
@@ -217,7 +221,8 @@ const DEFAULT_NOISE_OPTIONS = [
 
 function parse_noise_options(cfg::Dict, sigma, dt::Float64)::Vector{NoiseObj}
     raw = get(cfg, "noise_options", DEFAULT_NOISE_OPTIONS)
-    return [NoiseObj(name, prob, sigma, gamma, dt)
+    correlated_noise = get(cfg, "correlated_noise", false)
+    return [NoiseObj(name, prob, sigma, gamma, dt; correlated_noise=correlated_noise)
             for (prob, name, gamma) in raw]
 end
 
