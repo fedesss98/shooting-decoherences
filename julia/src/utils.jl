@@ -225,6 +225,36 @@ function _swap_unitary(ds::Int, da::Int)
   return U
 end
 
+function _n_qubit_exchange_unitary(n_qubits::Int, g::Float64=0.1, t::Float64=1.0)
+  # Qubit raising and lowering operators
+  sp = [0.0 1.0; 0.0 0.0]
+  sm = [0.0 0.0; 1.0 0.0]
+
+  # Total dimension, considering 1 qubit ancilla
+  n_total = n_qubits + 1
+  d = 2^(n_total)
+  H_int = zeros(ComplexF64, d, d)
+
+  # The ancilla is the 'last system' in the kronecker product
+  ancilla_idx = n_total
+  sp_anc = embed_operator(sp, ancilla_idx, n_total)
+  sm_anc = embed_operator(sm, ancilla_idx, n_total)
+    
+  # Sum over all k system qubits
+  for k in 1:n_qubits
+      sp_k = embed_operator(sp, k, n_total)
+      sm_k = embed_operator(sm, k, n_total)
+      
+      exchange_term = (sp_anc * sm_k) + (sm_anc * sp_k)
+      
+      H_int += (g / n_qubits) * exchange_term
+  end
+
+  # Return the time evolution unitary U(t)
+  U = exp(-1im * H_int * t)
+  return U
+end
+
 function kraus_from_unitary(
     U::AbstractMatrix{T},
     d_s::Int,
@@ -305,15 +335,15 @@ end
 Route to the correct Kraus operators given the name of the noise.
 The output is a List of Kraus operators.
 """
-function get_kraus_operators(noise, gamma, t)
+function get_kraus_operators(noise, gamma, t; n_qubits=1)
   if noise == "amplitude_damping"
-    return get_amplitudedamping_operators(gamma, t)
+    return get_amplitudedamping_operators(gamma, t; n_qubits=n_qubits)
   elseif noise == "phase_damping"
-    return get_phasedamping_operators(gamma, t)
+    return get_phasedamping_operators(gamma, t; n_qubits=n_qubits)
   elseif noise == "bitflip"
-    return get_bitflip_operators(gamma, t)
+    return get_bitflip_operators(gamma, t; n_qubits=n_qubits)
   elseif noise == "depolarizing"
-    return get_depolarizing_operators(gamma, t)
+    return get_depolarizing_operators(gamma, t; n_qubits=n_qubits)
   else
     error("Unknown noise model: $noise")
   end

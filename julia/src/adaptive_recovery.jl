@@ -1,18 +1,6 @@
 using LinearAlgebra
 using StatsBase
 
-function _swap_unitary(ds::Int, da::Int)
-  U = zeros(ComplexF64, ds * da, ds * da)
-  for s in 1:ds
-    for a in 1:da
-      row = (a - 1) * ds + s
-      col = (s - 1) * da + a
-      U[row, col] = 1.0 + 0.0im
-    end
-  end
-  return U
-end
-
 function discrimin(ρ_test, ρ1, ρ2, ds, da, q1::Real=0.5, q2::Real=0.5, tol=1e-10)
   size(ρ_test) == (ds * da, ds * da) || error("ρ_test has incompatible dimensions")
   size(ρ1) == (ds * da, ds * da) || error("ρ1 has incompatible dimensions")
@@ -120,28 +108,29 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   N2 = state.noise_options[2].supermap
 
   ds = 2^config.n_qubits
-  da = 2
 
   rho_free = unvec((Ox)^step * vec(state.ρ0))
   rho_to_rec = unvec(Nx * vec(state.ρ0))
   rho1 = unvec(N1 * vec(state.ρ0))
   rho2 = unvec(N2 * vec(state.ρ0))
 
-  η = ancilla_thermal_qubit(config.ancilla_alpha)
-  U_swap = _swap_unitary(ds, da)
-  model = CollisionModel(U_swap, config.sigma, ds, da, ancilla_state=η)
+  η = config.ancilla_state
+  da = size(η, 1)
+  model = CollisionModel(config.collision_unitary, config.sigma, ds, da, ancilla_state=η)
+  real_kraus = config.real_noise.extended_kraus
+  option_kraus = [noise.extended_kraus for noise in state.noise_options]
 
   rho_to_rec_ = apply_collision(model, rho_to_rec; ancilla_state=η, trace=false)
   rho1_ = apply_collision(model, rho1; ancilla_state=η, trace=false)
   rho2_ = apply_collision(model, rho2; ancilla_state=η, trace=false)
 
-  rho_to_rec_ = apply_extended_channel(rho_to_rec_, config.real_noise.kraus, ds)
-  rho1_ = apply_extended_channel(rho1_, config.real_noise.kraus, ds)
-  rho2_ = apply_extended_channel(rho2_, config.real_noise.kraus, ds)
+  rho_to_rec_ = apply_extended_channel(rho_to_rec_, real_kraus, ds)
+  rho1_ = apply_extended_channel(rho1_, real_kraus, ds)
+  rho2_ = apply_extended_channel(rho2_, real_kraus, ds)
 
-  Xi = kraus_to_superop(compose_kraus(config.real_noise.kraus, model.kraus_fwd))
-  Xi1 = kraus_to_superop(compose_kraus(state.noise_options[1].kraus, model.kraus_fwd))
-  Xi2 = kraus_to_superop(compose_kraus(state.noise_options[2].kraus, model.kraus_fwd))
+  Xi = kraus_to_superop(compose_kraus(real_kraus, model.kraus_fwd))
+  Xi1 = kraus_to_superop(compose_kraus(option_kraus[1], model.kraus_fwd))
+  Xi2 = kraus_to_superop(compose_kraus(option_kraus[2], model.kraus_fwd))
 
   q1 = state.noise_options[1].probability
   q2 = state.noise_options[2].probability

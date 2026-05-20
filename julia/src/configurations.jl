@@ -4,21 +4,22 @@ using StatsBase
 
 # Operators relative to the noise
 mutable struct NoiseObj
-  name::String
-  probability::Float64
-  kraus::Vector{Matrix{ComplexF64}}
-  extended_kraus::Vector{Matrix{ComplexF64}}
-  supermap_petz::Matrix{ComplexF64}
-  supermap_noise::Matrix{ComplexF64}
-  supermap::Matrix{ComplexF64}
+    name::String
+    probability::Float64
+    kraus::Vector{Matrix{ComplexF64}}
+    extended_kraus::Vector{Matrix{ComplexF64}}
+    supermap_petz::Matrix{ComplexF64}
+    supermap_noise::Matrix{ComplexF64}
+    supermap::Matrix{ComplexF64}
 end
-function NoiseObj(noise::String, p::Float64, sigma::Matrix{T}, gamma::Float64, t::Float64) where T
-  kraus = get_kraus_operators(noise, gamma, t)
-  n_qubits = Int(log2(size(sigma, 1)))
-  extended_kraus = expand_kraus_operators(kraus, n_qubits)
-  model = CollisionModel(extended_kraus, sigma)
-  M_petz, M_noise = build_superoperators(model)
-  return NoiseObj(noise, p, kraus, extended_kraus, M_petz, M_noise, M_noise)
+function NoiseObj(noise::String, p::Float64, sigma::Matrix{T}, gamma::Float64, t::Float64; correlated::Bool = false) where T
+    n_qubits = Int(log2(size(sigma, 1)))
+    affected_qubits = correlated ? n_qubits : 1
+    kraus = get_kraus_operators(noise, gamma, t; n_qubits=affected_qubits)
+    extended_kraus = expand_kraus_operators(kraus, n_qubits)
+    model = CollisionModel(extended_kraus, sigma)
+    M_petz, M_noise = build_superoperators(model)
+    return NoiseObj(noise, p, kraus, extended_kraus, M_petz, M_noise, M_noise)
 end
 
 # Static Configuration for the setup of the algorithm
@@ -135,6 +136,9 @@ end
 function make_collision_unitary(kind::String, ds::Int, da::Int)::Matrix{ComplexF64}
     if kind == "swap"
         return _swap_unitary(ds, da)
+    elseif kind == "jc"
+        n_qubits = Int(log2(ds))
+        return _n_qubit_exchange_unitary(n_qubits)
     else
         throw(ArgumentError("Unsupported collision_unitary: $kind"))
     end
@@ -162,10 +166,10 @@ function parse_recovery_config(cfg::Dict)::RecoveryConfig
     sigma         = make_reference_state(starting_state, n_qubits, beta, rng)
     noise_options = parse_noise_options(cfg, sigma, dt)
     if get(cfg, "real_noise", nothing) === nothing
-        println("No real noise specified in config, sampling from noise options...")
+        println("No real noise specified in config, sampling from noise options...\n")
         real_noise = sample_real_noise(rng, noise_options)
     else
-        println("Using specified real noise from config: $(cfg["real_noise"])")
+        println("Using specified real noise from config: $(cfg["real_noise"])\n")
         real_noise = [n for n in noise_options if n.name == cfg["real_noise"]][1]
     end
 
