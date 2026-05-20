@@ -17,7 +17,7 @@ function discrimin(ρ_test, ρ1, ρ2, ds, da, q1::Real=0.5, q2::Real=0.5, tol=1e
 
   Π1 = zeros(ComplexF64, da, da)
   for i in eachindex(eigenvalues)
-    if eigenvalues[i] > tol
+    if abs(eigenvalues[i]) > tol
       v = eigenvectors[:, i]
       Π1 += v * v'
     end
@@ -44,33 +44,26 @@ function collapse_map(input_state, output_state)
   superop = zeros(ComplexF64, d^2, d^2)
 
   function stochastic_projection(states_in, states_out)
-    return sum(states_out[:, i] * states_in[:, i]' for i in 1:size(states_in, 2))
+    return states_out * states_in'
   end
 
-  eval_in, vec_in = eigen(Hermitian(input_state))
-  eval_out, vec_out = eigen(Hermitian(output_state))
+  eigen_decomp = eigen(Hermitian(input_state), sortby = x -> -real(x))
+  p            = clean_eigenvalues(eigen_decomp.values)
+  psi_in       = eigen_decomp.vectors
+
+  eigen_decomp = eigen(Hermitian(output_state), sortby = x -> -real(x))
+  q            = clean_eigenvalues(eigen_decomp.values)
+  phi_out      = eigen_decomp.vectors
 
   basis = Matrix{ComplexF64}(I, d, d)
-  U1 = stochastic_projection(vec_in, basis)
+  U1 = stochastic_projection(psi_in, basis)
   superop .+= kron(conj(U1), U1)
 
-  if d == 2
-    p1, p2 = eval_in
-    q1, q2 = eval_out
-    if !isapprox(q1, p1; atol=1e-12)
-      if q1 < p1 && p1 > 1e-12
-        k0 = ComplexF64[sqrt(q1 / p1) 0; 0 1]
-        k1 = ComplexF64[0 0; sqrt(max(0, 1 - q1 / p1)) 0]
-        superop *= kraus_to_superop([k0, k1])
-      elseif q2 > p2 && q2 > 1e-12
-        k0 = ComplexF64[1 0; 0 sqrt(p2 / q2)]
-        k1 = ComplexF64[0 sqrt(max(0, 1 - p2 / q2)); 0 0]
-        superop *= kraus_to_superop([k0, k1])
-      end
-    end
-  end
+  T = stochastic_transition(p, q)
+  K_transfer = kraus_from_transition(T)
+  superop *= kraus_to_superop(K_transfer)
 
-  U2 = stochastic_projection(basis, vec_out)
+  U2 = stochastic_projection(basis, phi_out)
   superop *= kron(conj(U2), U2)
   return superop
 end
@@ -124,9 +117,10 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   rho1_ = apply_collision(model, rho1; ancilla_state=η, trace=false)
   rho2_ = apply_collision(model, rho2; ancilla_state=η, trace=false)
 
-  rho_to_rec_ = apply_extended_channel(rho_to_rec_, real_kraus, ds)
-  rho1_ = apply_extended_channel(rho1_, real_kraus, ds)
-  rho2_ = apply_extended_channel(rho2_, real_kraus, ds)
+  n_subsystems = config.correlated_noise ? 1 : config.n_qubits
+  rho_to_rec_ = apply_channel(real_kraus, rho_to_rec_, n_subsystems; extra_dims=da)
+  rho1_ = apply_channel(real_kraus, rho1_, n_subsystems; extra_dims=da)
+  rho2_ = apply_channel(real_kraus, rho2_, n_subsystems; extra_dims=da)
 
   Xi = kraus_to_superop(compose_kraus(real_kraus, model.kraus_fwd))
   Xi1 = kraus_to_superop(compose_kraus(option_kraus[1], model.kraus_fwd))
