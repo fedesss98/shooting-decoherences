@@ -18,6 +18,14 @@
 #   - "auto": Use the reference state itself as initial state
 #   - "inputstate": Use a specific input state defined by the user (default: "thermal")
 #
+# collision_unitary: Named joint system-ancilla unitary built at initialization:
+#   - "swap": swap-like collision between the system and the configured ancilla
+#   - "exchange": Jaynes-Cummings-like interaction with a multi-qubit system
+#
+# ancilla_state: Named ancilla input state built at initialization:
+#   - "thermal_qubit": diag(ancilla_alpha, 1 - ancilla_alpha)
+#   - "ground_qubit": |0><0|
+#
 # seed: Random seed for reproducibility (default: 42)
 #
 # noise_options: List of noise channels and their probabilities (default: empty list):
@@ -28,13 +36,8 @@
 #       - "depolarizing", 
 #       - "bitflip"
 #
-# collision_unitary: Named joint system-ancilla unitary built at initialization:
-#   - "swap": swap-like collision between the system and the configured ancilla
-#   - "exchange": Jaynes-Cummings-like interaction with a multi-qubit system
+# correlated_noise: Wether to use correlated Kraus operators to apply noise at once on the whole multi-qubit system
 #
-# ancilla_state: Named ancilla input state built at initialization:
-#   - "thermal_qubit": diag(ancilla_alpha, 1 - ancilla_alpha)
-#   - "ground_qubit": |0><0|
 
 
 name            = "notebook"
@@ -51,7 +54,8 @@ ancilla_alpha   = 0.8
 # seed            = 7697
 seed            = 7698
 noise_options = [
-    [0.5, "amplitude_damping", 1.0],
+    [0.5, "bitflip", 1.0],
     [0.5, "phase_damping", 1.0],
 ]
 real_noise = "amplitude_damping"
+correlated_noise = true
