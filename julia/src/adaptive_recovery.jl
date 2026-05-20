@@ -160,6 +160,8 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   state.noise_options[1].supermap = P * N1
   state.noise_options[2].supermap = P * N2
 
+  @debug "Current choice" state.choice.current
+
   return nothing
 end
 
