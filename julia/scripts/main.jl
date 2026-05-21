@@ -1,40 +1,21 @@
-using Serialization
-using StatsBase
-using LinearAlgebra
+using Pkg
+Pkg.activate(joinpath(@__DIR__, ".."))
 
-using DecoKiller
+include(joinpath(@__DIR__, "..", "src", "DecoKiller.jl"))
+using .DecoKiller
 
-const GAMMA = 1.0
-const TIMES = range(0.0, 1, 101)  # The number of items should be even
-const N_STATES = 16 # How many states generated
-const N_QUBITS = 5 # Qubits to create a logic qubit
-const BETA = 0.5
+function main()
+    config_path = length(ARGS) >= 1 ? ARGS[1] : joinpath(@__DIR__, "..", "..", "configs", "config.toml")
+    cfg, _, logs, avg_fids = run_experiment(config_path)
 
-const I2 = [1.0+0.0im 0.0; 0.0 1.0]
-# Ground and excited states of one qubit
-const g0 = [0.0 + 0.0im; 1.0]
-const e1 = [1.0 + 0.0im; 0.0]
-const SIGMA_X = [0.0+0.0im 1.0; 1.0 0.0+0.0im]
-const SIGMA_Y = [0.0+0.0im -1.0im; 1.0im 0.0+0.0im]
-const noise_probabilities = normalize([0.8, 0.2])
-
-function collision(ρ, μ)
-  return tensor(ρ, μ)
+    println("Experiment completed")
+    println("Name: $(cfg.name)")
+    println("Output: $(cfg.experiment_dir)")
+    println("Steps: $(cfg.n_timesteps)")
+    println("Final fidelity (with recovery): $(round(logs.fidelities[end], digits=6))")
+    println("Final fidelity (no recovery):  $(round(logs.ref_fidelities[end], digits=6))")
+    println("Average final fidelity (with recovery): $(round(avg_fids[2][end], digits=6))")
+    println("Average final fidelity (no recovery):  $(round(avg_fids[1][end], digits=6))")
 end
 
-
-function recovery_state(steps=1000)
-  noise = sample([SIGMA_X, SIGMA_Y], Weights(noise_probabilities))
-
-  σx_count = σy_count = 0
-
-  ρ = e1 * e1'
-  μ = g0 * g0'
-
-  for i in 1:steps
-    σ = collision(ρ, μ)
-
-  end
-
-
-end
+main()

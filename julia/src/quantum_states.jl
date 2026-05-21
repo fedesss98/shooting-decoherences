@@ -58,7 +58,6 @@ Create a full-rank density matrix for n_qubits
 function fullrank_state(n_qubits)
     Random.seed!(1234)
     coeffs = normalize(randn(Float64, 2^n_qubits))
-    println(coeffs)
     r = zeros(ComplexF64, 2^n_qubits, 2^n_qubits)
     for (i, c) in enumerate(coeffs)
         psi = zeros(ComplexF64, 2^n_qubits)
@@ -77,8 +76,8 @@ function thermal_state(n, beta)
     q = zeros(ComplexF64, 2^n, 2^n)
     for i in 1:n
         for j in 1:i-1
-            σz_i = foldl(kron, [k == i ? σz : I2 for k in 1:n])
-            σz_j = foldl(kron, [k == j ? σz : I2 for k in 1:n])
+            σz_i = foldl(kron, [k == i ? σz : I(2) for k in 1:n])
+            σz_j = foldl(kron, [k == j ? σz : I(2) for k in 1:n])
             q += σz_i * σz_j
         end
     end

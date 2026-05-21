@@ -211,6 +211,112 @@ function kraus_to_superop(kraus_ops)
     return superop
 end
 
+using LinearAlgebra
+
+function _swap_unitary(ds::Int, da::Int)
+  U = zeros(ComplexF64, ds * da, ds * da)
+  for s in 1:ds
+    for a in 1:da
+      row = (a - 1) * ds + s
+      col = (s - 1) * da + a
+      U[row, col] = 1.0 + 0.0im
+    end
+  end
+  return U
+end
+
+function _n_qubit_exchange_unitary(n_qubits::Int, g::Float64=0.1, t::Float64=1.0)
+  # Qubit raising and lowering operators
+  sp = [0.0 1.0; 0.0 0.0]
+  sm = [0.0 0.0; 1.0 0.0]
+
+  # Total dimension, considering 1 qubit ancilla
+  n_total = n_qubits + 1
+  d = 2^(n_total)
+  H_int = zeros(ComplexF64, d, d)
+
+  # The ancilla is the 'last system' in the kronecker product
+  ancilla_idx = n_total
+  sp_anc = embed_operator(sp, ancilla_idx, n_total)
+  sm_anc = embed_operator(sm, ancilla_idx, n_total)
+    
+  # Sum over all k system qubits
+  for k in 1:n_qubits
+      sp_k = embed_operator(sp, k, n_total)
+      sm_k = embed_operator(sm, k, n_total)
+      
+      exchange_term = (sp_anc * sm_k) + (sm_anc * sp_k)
+      
+      H_int += (g / n_qubits) * exchange_term
+  end
+
+  # Return the time evolution unitary U(t)
+  U = exp(-1im * H_int * t)
+  return U
+end
+
+function kraus_from_unitary(
+    U::AbstractMatrix{T},
+    d_s::Int,
+    d_a::Int;
+    ancilla_state::AbstractMatrix,
+    atol::Real=1e-12,
+) where T
+    size(U) == (d_s*d_a, d_s*d_a) || throw(ArgumentError("wrong U size"))
+    size(ancilla_state) == (d_a, d_a) || throw(ArgumentError("wrong ancilla size"))
+
+    eig = eigen(Hermitian(Matrix{T}(ancilla_state)))
+    vals = eig.values
+    vecs = eig.vectors
+
+    kraus = Matrix{T}[]
+
+    # (s,a) -> (s-1)*d_a + a
+    for ν in eachindex(vals)
+        pν = real(vals[ν])
+        pν <= atol && continue
+        ψν = vecs[:, ν]
+
+        for i in 1:d_a
+            K = zeros(T, d_s, d_s)
+
+            for sout in 1:d_s
+                row_base = (sout - 1) * d_a
+                for sin in 1:d_s
+                    col_base = (sin - 1) * d_a
+                    amp = zero(T)
+                    for ain in 1:d_a
+                        row = row_base + i
+                        col = col_base + ain
+                        amp += U[row, col] * ψν[ain]
+                    end
+                    K[sout, sin] = sqrt(T(pν)) * amp
+                end
+            end
+
+            push!(kraus, K)
+        end
+    end
+
+    return kraus
+end
+
+
+function compose_kraus(
+    kraus2::Vector{<:AbstractMatrix},
+    kraus1::Vector{<:AbstractMatrix},
+)
+    # channel 1 first, then channel 2
+    out = Matrix{eltype(kraus1[1])}[]
+    for K2 in kraus2
+        for K1 in kraus1
+            push!(out, K2 * K1)
+        end
+    end
+    return out
+end
+
+
 """
   build_superoperators(model)
 Builds the superoperator matrix which implements the n+1 evolution step:
@@ -229,15 +335,15 @@ end
 Route to the correct Kraus operators given the name of the noise.
 The output is a List of Kraus operators.
 """
-function get_kraus_operators(noise, gamma, t)
+function get_kraus_operators(noise, gamma, t; n_qubits=1)
   if noise == "amplitude_damping"
-    return get_amplitudedamping_operators(gamma, t)
+    return get_amplitudedamping_operators(gamma, t; n_qubits=n_qubits)
   elseif noise == "phase_damping"
-    return get_phasedamping_operators(gamma, t)
+    return get_phasedamping_operators(gamma, t; n_qubits=n_qubits)
   elseif noise == "bitflip"
-    return get_bitflip_operators(gamma, t)
+    return get_bitflip_operators(gamma, t; n_qubits=n_qubits)
   elseif noise == "depolarizing"
-    return get_depolarizing_operators(gamma, t)
+    return get_depolarizing_operators(gamma, t; n_qubits=n_qubits)
   else
     error("Unknown noise model: $noise")
   end
@@ -262,3 +368,125 @@ function embed_state(ρ, d_target)
     ρ_out[1:d, 1:d] = ρ
     return ρ_out
 end
+
+"""
+  stochastic_transition(p, q; A=nothing, tol=1e-12)
+Given two probability distributions p and q, construct a stochastic transition matrix T such that T*p = q.
+This is done by first constructing a transport plan R = q*p' + A, 
+where A is an optional adjustment matrix to ensure positivity and stability.
+Then, T is obtained by normalizing the columns of R by p. 
+If p[i] is zero, the corresponding column of T is set to q (arbitrary stochastic column, 
+since it does not affect the result).
+The function also includes checks to ensure that R is a valid transport plan
+(non-negative and with correct marginals), and that T is a valid stochastic matrix.
+"""
+function stochastic_transition(p, q; A=nothing, tol=1e-12, checktol=1e-8)
+    p = collect(float.(p))
+    q = collect(float.(q))
+
+    # Normalize defensively
+    p ./= sum(p)
+    q ./= sum(q)
+
+    n = length(p)
+    m = length(q)
+
+    if A === nothing
+        A = zeros(m, n)
+    else
+        A = copy(float.(A))
+    end
+
+    # Project A so that its row and column sums vanish
+    rowA = sum(A, dims=2)              # m × 1
+    colA = sum(A, dims=1)              # 1 × n
+    totalA = sum(A)
+
+    A .= A .- rowA ./ n .- colA ./ m .+ totalA / (m * n)
+
+    R = q * p' + A
+
+    # Clean tiny numerical noise
+    R[abs.(R) .< tol] .= 0.0
+
+    if any(R .< -tol)
+        error("Invalid transport plan: some entries of R are negative.")
+    end
+
+    # Optional clipping after negativity check
+    R .= max.(R, 0.0)
+
+    # Check marginals
+    if maximum(abs.(sum(R, dims=1)[:] .- p)) > checktol
+        error("Invalid transport plan: column sums of R are not p.")
+    end
+
+    if maximum(abs.(sum(R, dims=2)[:] .- q)) > checktol
+        error("Invalid transport plan: row sums of R are not q.")
+    end
+
+    T = zeros(m, n)
+
+    for i in 1:n
+        if p[i] > tol
+            T[:, i] = R[:, i] ./ p[i]
+        else
+            # Arbitrary stochastic column, because this column does not affect E(alpha)
+            T[:, i] = q
+        end
+    end
+
+    # Numerical cleanup
+    T[abs.(T) .< tol] .= 0.0
+
+    # Defensive column normalization
+    for i in 1:n
+        s = sum(T[:, i])
+        if s > tol
+            T[:, i] ./= s
+        else
+            T[:, i] .= q
+        end
+    end
+
+    return T
+end
+
+
+"""
+  kraus_from_transition(T)
+Given a stochastic transition matrix T, construct a set of Kraus operators that implement the corresponding quantum channel. 
+Each non-zero entry T[j, i] corresponds to a Kraus operator K_ji = sqrt(T[j, i]) |j⟩⟨i|, 
+where |i⟩ and |j⟩ are the standard basis states of the input and output Hilbert spaces, respectively.
+"""
+function kraus_from_transition(T)
+    m, n = size(T)
+    Ks = Matrix{Float64}[]
+
+    for j in 1:m
+        for i in 1:n
+            if T[j, i] > 0
+                K = zeros(m, n)
+                K[j, i] = sqrt(T[j, i])
+                push!(Ks, K)
+            end
+        end
+    end
+
+    return Ks
+end
+
+function clean_eigenvalues(eigvals, tol=1e-10)
+    cleaned = similar(eigvals)
+    for i in eachindex(eigvals)
+        val = real(eigvals[i])
+        if abs(val) < tol
+            cleaned[i] = 0.0
+        elseif val < 0
+            cleaned[i] = 0.0
+        else
+            cleaned[i] = val
+        end
+    end
+    return cleaned
+  end

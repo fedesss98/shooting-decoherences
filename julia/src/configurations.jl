@@ -4,24 +4,28 @@ using StatsBase
 
 # Operators relative to the noise
 mutable struct NoiseObj
-  name::String
-  probability::Float64
-  kraus::Vector{Matrix{ComplexF64}}
-  supermap_petz::Matrix{ComplexF64}
-  supermap_noise::Matrix{ComplexF64}
-  supermap::Matrix{ComplexF64}
+    name::String
+    probability::Float64
+    kraus::Vector{Matrix{ComplexF64}}
+    extended_kraus::Vector{Matrix{ComplexF64}}
+    supermap_petz::Matrix{ComplexF64}
+    supermap_noise::Matrix{ComplexF64}
+    supermap::Matrix{ComplexF64}
 end
-function NoiseObj(noise::String, p::Float64, sigma::Matrix{T}, gamma::Float64, t::Float64) where T
-  kraus = get_kraus_operators(noise, gamma, t)
-  n_qubits = Int(log2(size(sigma, 1)))
-  model = CollisionModel(kraus, sigma, n=n_qubits)
-  M_petz, M_noise = build_superoperators(model)
-  return NoiseObj(noise, p, kraus, M_petz, M_noise, M_noise)
+function NoiseObj(noise::String, p::Float64, sigma::Matrix{T}, gamma::Float64, t::Float64; correlated::Bool = false) where T
+    n_qubits = Int(log2(size(sigma, 1)))
+    affected_qubits = correlated ? n_qubits : 1
+    kraus = get_kraus_operators(noise, gamma, t; n_qubits=affected_qubits)
+    extended_kraus = expand_kraus_operators(kraus, n_qubits)
+    model = CollisionModel(extended_kraus, sigma)
+    M_petz, M_noise = build_superoperators(model)
+    return NoiseObj(noise, p, kraus, extended_kraus, M_petz, M_noise, M_noise)
 end
 
 # Static Configuration for the setup of the algorithm
 struct RecoveryConfig
     name::String
+    experiment_dir::String
     sigma::Matrix{ComplexF64}
     recovery_type::String
     real_noise::NoiseObj
@@ -31,6 +35,43 @@ struct RecoveryConfig
     seed::Int
     rng::AbstractRNG
     dt::Float64
+    ancilla_alpha::Float64
+    ancilla_state_name::String
+    collision_unitary_name::String
+    ancilla_state::Matrix{ComplexF64}
+    collision_unitary::Matrix{ComplexF64}
+    correlated_noise::Bool
+end
+
+function RecoveryConfig(
+    name::String,
+    experiment_dir::String,
+    sigma::Matrix{ComplexF64},
+    recovery_type::String,
+    real_noise::NoiseObj,
+    n_qubits::Int,
+    n_timesteps::Int,
+    n_states::Int,
+    seed::Int,
+    rng::AbstractRNG,
+    dt::Float64,
+    ancilla_alpha::Float64;
+    ancilla_state_name::String="thermal_qubit",
+    collision_unitary_name::String="swap",
+    correlated_noise::Bool=false,
+)
+    ancilla_state = make_ancilla_state(ancilla_state_name, ancilla_alpha)
+    collision_unitary = make_collision_unitary(
+        collision_unitary_name,
+        2^n_qubits,
+        size(ancilla_state, 1),
+    )
+
+    return RecoveryConfig(
+        name, experiment_dir, sigma, recovery_type, real_noise,
+        n_qubits, n_timesteps, n_states, seed, rng, dt, ancilla_alpha,
+        ancilla_state_name, collision_unitary_name, ancilla_state, collision_unitary, correlated_noise
+    )
 end
 
 mutable struct ChoiceSystem
@@ -39,7 +80,7 @@ mutable struct ChoiceSystem
     c1_count::Int
     c2_count::Int
     current::Int
-    current_choices::Vector{Int}
+    history::Vector{Int}
 end
 
 # Dynamic State: Updates every iteration
@@ -59,11 +100,12 @@ const SupermapsLogged = @NamedTuple{Nx::Matrix{ComplexF64}, N1::Matrix{ComplexF6
 struct RecoveryLogs
     fidelities::Vector{Float64}
     ref_fidelities::Vector{Float64}
+    choice_history::Vector{Int}
     # This will store NamedTuples containing 4 matrices
     maps::Vector{SupermapsLogged}
 end
 # Constructor to initialize empty logs
-RecoveryLogs() = RecoveryLogs(Float64[], Float64[], SupermapsLogged[])
+RecoveryLogs() = RecoveryLogs(Float64[], Float64[], Int[], SupermapsLogged[])
 
 """
     load_configuration(config_file)
@@ -75,6 +117,7 @@ function load_configuration(config_file="./configs/config.toml")
     cfg = TOML.parsefile(config_file)
     recovery_cfg  = parse_recovery_config(cfg)
     noise_options  = parse_noise_options(cfg, recovery_cfg.sigma, recovery_cfg.dt)
+    @debug "Parsed Noise Options: " noise_options
     recovery_state = initialize_recovery_state(recovery_cfg, noise_options)
     return recovery_cfg, recovery_state, RecoveryLogs()
 end
@@ -82,17 +125,42 @@ end
 # Helper function to create RNG from seed, allowing for reproducibility or randomness
 make_rng(seed) = seed == -1 ? Random.default_rng() : Xoshiro(seed)
 
+function make_ancilla_state(kind::String, alpha::Float64)::Matrix{ComplexF64}
+    if kind == "thermal_qubit"
+        return Matrix{ComplexF64}(ancilla_thermal_qubit(alpha; T=ComplexF64))
+    elseif kind == "ground_qubit"
+        return Matrix{ComplexF64}(ancilla_ground_state(ComplexF64, 2))
+    else
+        throw(ArgumentError("Unsupported ancilla_state: $kind"))
+    end
+end
+
+function make_collision_unitary(kind::String, ds::Int, da::Int)::Matrix{ComplexF64}
+    if kind == "swap"
+        return _swap_unitary(ds, da)
+    elseif kind == "jc"
+        n_qubits = Int(log2(ds))
+        return _n_qubit_exchange_unitary(n_qubits)
+    else
+        throw(ArgumentError("Unsupported collision_unitary: $kind"))
+    end
+end
+
 
 function parse_recovery_config(cfg::Dict)::RecoveryConfig
     name          = get(cfg, "name",          "test")
     n_qubits      = get(cfg, "n_qubits",      1)
     beta          = get(cfg, "beta",          2.0)
     dt            = get(cfg, "dt",            0.1)
+    ancilla_alpha = get(cfg, "ancilla_alpha", 0.8)
+    ancilla_state_name = get(cfg, "ancilla_state", "thermal_qubit")
+    collision_unitary_name = get(cfg, "collision_unitary", "swap")
     n_timesteps   = get(cfg, "n_timesteps",   10)
     n_states      = get(cfg, "n_states",      1)
     seed          = get(cfg, "seed",          42)
     recovery_type = get(cfg, "recovery_type", "auto")
     starting_state = get(cfg, "starting_state", "thermal")
+    correlated_noise = get(cfg, "correlated_noise", false)
 
     rng           = make_rng(seed)
     experiment_dir = setup_experiment_dir(name, cfg)
@@ -101,16 +169,23 @@ function parse_recovery_config(cfg::Dict)::RecoveryConfig
     sigma         = make_reference_state(starting_state, n_qubits, beta, rng)
     noise_options = parse_noise_options(cfg, sigma, dt)
     if get(cfg, "real_noise", nothing) === nothing
-        println("No real noise specified in config, sampling from noise options...")
+        println("No real noise specified in config, sampling from noise options...\n")
         real_noise = sample_real_noise(rng, noise_options)
     else
-        println("Using specified real noise from config...")
-        real_noise = [n for n in noise_options if n.name == cfg["real_noise"]][1]
+        println("Using specified real noise from config: $(cfg["real_noise"])\n")
+        real_noise_idx = findfirst(n -> n.name == cfg["real_noise"], noise_options)
+        if real_noise_idx === nothing
+            throw(ArgumentError("Specified real noise '$(cfg["real_noise"])' not found in noise options"))
+        end
+        real_noise = noise_options[real_noise_idx]
     end
 
     return RecoveryConfig(
-        name, sigma, recovery_type, real_noise,
-        n_qubits, n_timesteps, n_states, seed, rng, dt
+        name, experiment_dir, sigma, recovery_type, real_noise,
+        n_qubits, n_timesteps, n_states, seed, rng, dt, ancilla_alpha;
+        ancilla_state_name=ancilla_state_name,
+        collision_unitary_name=collision_unitary_name,
+        correlated_noise=correlated_noise
     )
 end
 
@@ -121,6 +196,7 @@ function setup_experiment_dir(name::String, cfg::Dict)::String
 
     mkpath(joinpath(experiment_dir, "logs"))
     mkpath(joinpath(experiment_dir, "visualization"))
+    mkpath(joinpath(experiment_dir, "data"))
 
     open(joinpath(experiment_dir, "config.toml"), "w") do io
         TOML.print(io, cfg)
@@ -135,6 +211,8 @@ function make_reference_state(kind::String, n_qubits::Int, beta::Float64, rng)
     elseif kind == "random"
         spectrum = 0.1 .+ 0.9 .* rand(rng, 2^n_qubits)
         return rand_state_with_spectrum(spectrum; rng=rng)
+    elseif kind == "codespace"
+        return codespace_dm(n_qubits, 0.6, 0.4)
     else
         throw(ArgumentError("Unsupported starting state: $kind"))
     end
@@ -147,7 +225,8 @@ const DEFAULT_NOISE_OPTIONS = [
 
 function parse_noise_options(cfg::Dict, sigma, dt::Float64)::Vector{NoiseObj}
     raw = get(cfg, "noise_options", DEFAULT_NOISE_OPTIONS)
-    return [NoiseObj(name, prob, sigma, gamma, dt)
+    correlated_noise = get(cfg, "correlated_noise", false)
+    return [NoiseObj(name, prob, sigma, gamma, dt; correlated=correlated_noise)
             for (prob, name, gamma) in raw]
 end
 

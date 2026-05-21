@@ -1,38 +1,26 @@
 module DecoKiller
 
 using ProgressMeter
+using JSON
+using Dates
 
-export 
-PetzMaps,
-get_kraus_operators, 
-# initial configuration objects
-load_configuration, RecoveryConfig, RecoveryState, RecoveryLogs, NoiseObj, ChoiceSystem,
-# initial states
-codespace_state, codespace_dm, thermal_state, random_state, input_state,
-apply_channel, recovery_map, rand_state_with_spectrum,
-# metrics
-fidelity, overlap,
-partial_traces,
-UnitaryDilation,
-CollisionModel, apply_collision, extract_kraus_operators,
-# main function
-run_experiment, discrimin, update_noise_history!, 
-measure_ancilla, update_noise_guess, reset_initial_state!, step_recovery!
+export run_experiment
 
+# Core primitives and lower-level modules.
 include("PetzMaps.jl")
 include("UnitaryDilation/UnitaryDilation.jl")
-
 
 using .PetzMaps
 using .UnitaryDilation
 
+# Shared utilities and configuration.
 include("utils.jl")
-# Add log functionality, printing to both console and file with timestamps and log levels
 include("logging.jl")
-# Add configuration files loading and setup
 include("configurations.jl")
-# Implement the main algorithm
+
+# Algorithm and reporting.
 include("adaptive_recovery.jl")
+include("custom_plots.jl")
 
 
 function reset_initial_state!(state::RecoveryState, cfg::RecoveryConfig)
@@ -65,39 +53,93 @@ function reset_initial_state!(state::RecoveryState, cfg::RecoveryConfig)
 end
 
 
+function _run_single_state!(cfg::RecoveryConfig, state::RecoveryState, logs::RecoveryLogs, s::Int)
+    initial_state = deepcopy(state)
+    reset_initial_state!(initial_state, cfg)
+
+    p_time = Progress(cfg.n_timesteps, desc=" State $s ", offset=1)
+    for step in 1:cfg.n_timesteps
+        iterate_recovery!(step, initial_state, cfg, logs)
+        next!(p_time; showvalues=[
+            ("Fidelity", logs.fidelities[end]),
+            ("Reference", logs.ref_fidelities[end])
+        ])
+    end
+    finish!(p_time)
+
+    start_idx = (s - 1) * cfg.n_timesteps + 1
+    end_idx = s * cfg.n_timesteps
+    return start_idx, end_idx
+end
+
+
+function _plot_and_save_results(cfg::RecoveryConfig, state::RecoveryState, logs::RecoveryLogs, avg_fidelities)
+    save_results!(cfg, state, logs, avg_fidelities)
+    plot_autorecovery(state, cfg, logs; show=false, save=true, xlims=[0, cfg.n_timesteps])
+    plot_average_fidelity(avg_fidelities[2], avg_fidelities[1], state, cfg; show=false, save=true)
+    return nothing
+end
+
+
 function run_experiment(config_file="./configs/config.toml")
     cfg, state, logs = load_configuration(config_file)
-    
+
     ref_fidelities = zeros(Float64, cfg.n_timesteps)
     fidelities = zeros(Float64, cfg.n_timesteps)
 
     p_states = Progress(cfg.n_states, desc="Adaptive Recovery ")
     for s in 1:cfg.n_states
-        initial_state = deepcopy(state)  # Reset state for each run
-        reset_initial_state!(initial_state, cfg)
-
-        # Setup the progress bar for one state evolution
-        p_time = Progress(
-            cfg.n_timesteps, desc=" State $s ", offset=1)
-
-        for step in 1:cfg.n_timesteps
-            step_recovery!(step, initial_state, cfg, logs)
-            
-            next!(p_time; showvalues=[
-                ("Fidelity", logs.fidelities[end]),
-                ("Reference", logs.ref_fidelities[end])
-            ])
-        end
-        finish!(p_time)
-        start_state_results = (s - 1) * cfg.n_timesteps + 1
-        end_state_results = s * cfg.n_timesteps
-
-        ref_fidelities .+= logs.ref_fidelities[start_state_results:end_state_results]
-        fidelities .+= logs.fidelities[start_state_results:end_state_results]
+        start_idx, end_idx = _run_single_state!(cfg, state, logs, s)
+        ref_fidelities .+= logs.ref_fidelities[start_idx:end_idx]
+        fidelities .+= logs.fidelities[start_idx:end_idx]
         next!(p_states)
     end
-    avg_fidelities = ref_fidelities ./ cfg.n_states, fidelities ./ cfg.n_states
+    avg_fidelities = (ref_fidelities ./ cfg.n_states, fidelities ./ cfg.n_states)
+
+    _plot_and_save_results(cfg, state, logs, avg_fidelities)
+
     return cfg, state, logs, avg_fidelities
+end
+
+function _serialize_maps(logs::RecoveryLogs)
+    return [
+        Dict(
+            "Nx" => vec(real(m.Nx)),
+            "N1" => vec(real(m.N1)),
+            "N2" => vec(real(m.N2)),
+            "P" => vec(real(m.P)),
+            "dim" => size(m.Nx)
+        ) for m in logs.maps
+    ]
+end
+
+function save_results!(cfg::RecoveryConfig, state::RecoveryState, logs::RecoveryLogs, avg_fidelities)
+    out_file = joinpath(cfg.experiment_dir, "data", "results.json")
+    payload = Dict(
+        "timestamp" => string(now()),
+        "experiment" => cfg.name,
+        "n_qubits" => cfg.n_qubits,
+        "n_timesteps" => cfg.n_timesteps,
+        "n_states" => cfg.n_states,
+        "seed" => cfg.seed,
+        "real_noise" => cfg.real_noise.name,
+        "noise_options" => [n.name for n in state.noise_options],
+        "ancilla_state" => cfg.ancilla_state_name,
+        "collision_unitary" => cfg.collision_unitary_name,
+        "fidelities" => logs.fidelities,
+        "ref_fidelities" => logs.ref_fidelities,
+        "choice_history" => logs.choice_history,
+        "choice_c1" => state.choice.c1,
+        "choice_c2" => state.choice.c2,
+        "avg_ref_fidelities" => avg_fidelities[1],
+        "avg_fidelities" => avg_fidelities[2],
+        "maps" => _serialize_maps(logs)
+    )
+
+    open(out_file, "w") do io
+        JSON.print(io, payload, 2)
+    end
+    return out_file
 end
 
 
