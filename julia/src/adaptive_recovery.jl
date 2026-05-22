@@ -100,6 +100,8 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   N1 = state.noise_options[1].supermap
   N2 = state.noise_options[2].supermap
 
+  maps_to_log = (Nx=copy(Nx), N1=copy(N1), N2=copy(N2))
+
   ds = 2^config.n_qubits
 
   rho_free = unvec((Ox)^step * vec(state.ρ0))
@@ -151,7 +153,17 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   fid_initial = fidelity(state.ρ0, rho_rec)
   fid_track = fidelity(state.ρ0, rho_free)
 
-  push!(logs.maps, (Nx=copy(Nx), N1=copy(N1), N2=copy(N2), P=copy(P)))
+  maps_to_log = (; 
+    maps_to_log..., 
+    Xi=copy(Xi), 
+    Xi1=copy(Xi1), 
+    Xi2=copy(Xi2), 
+    Cx=copy(Cx), 
+    C1=copy(C1), 
+    C2=copy(C2), 
+    P=copy(P)
+  )
+  push!(logs.maps, maps_to_log)
   push!(logs.ref_fidelities, fid_track)
   push!(logs.fidelities, fid_initial)
   push!(logs.choice_history, state.choice.current)
