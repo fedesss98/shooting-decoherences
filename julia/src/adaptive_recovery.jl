@@ -6,29 +6,39 @@ function discrimin(ρ_test, ρ1, ρ2, ds, da, q1::Real=0.5, q2::Real=0.5, tol=1e
   size(ρ1) == (ds * da, ds * da) || error("ρ1 has incompatible dimensions")
   size(ρ2) == (ds * da, ds * da) || error("ρ2 has incompatible dimensions")
 
+  # Trace out the system to get the reduced states of the ancilla
   η_test = ptrace_sys(ρ_test, ds, da)
   η1 = ptrace_sys(ρ1, ds, da)
   η2 = ptrace_sys(ρ2, ds, da)
 
   Δη = q1 * η1 - q2 * η2
 
+  # Early exit: states are indistinguishable, return uniform
+  if norm(Δη) < tol
+    M1 = (1 / sqrt(2)) * Matrix{ComplexF64}(I, da, da)
+    M2 = (1 / sqrt(2)) * Matrix{ComplexF64}(I, da, da)
+    return [0.5, 0.5], [M1, M2]
+  end
+
   eigen_decomp = eigen(Hermitian(Δη))
-  eigenvalues = eigen_decomp.values
+  eigenvalues  = eigen_decomp.values
   eigenvectors = eigen_decomp.vectors
 
   Π1 = zeros(ComplexF64, da, da)
   for i in eachindex(eigenvalues)
-    if abs(eigenvalues[i]) > tol
-      v = eigenvectors[:, i]
-      Π1 += v * v'
-    end
+      if eigenvalues[i] > tol
+          v   = eigenvectors[:, i]
+          Π1 += v * v'
+      end
   end
   Π2 = I(da) - Π1
 
   p1 = real(tr(Π1 * η_test))
   p2 = real(tr(Π2 * η_test))
-  total = max(p1 + p2, tol)
-  return [p1 / total, p2 / total], [Matrix(Π1), Matrix(Π2)]
+
+  # Numerical sanity: p1 + p2 should be 1
+  total = p1 + p2
+  return [p1/total, p2/total], [Π1, Π2]
 end
 
 function collapse_state(ρ_SA, Π)
