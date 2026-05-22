@@ -40,22 +40,22 @@
 #
 
 
-name            = "notebook"
+name            = "notebook_1qbt"
 n_qubits        = 2
 beta            = 1.0
-dt              = 0.1
-n_timesteps     = 25
-n_states        = 100
+dt              = 10.0
+n_timesteps     = 200
+n_states        = 1
 starting_state  = "thermal"
 recovery_type   = "codespace"
 collision_unitary = "jc"
 ancilla_state   = "thermal_qubit"
 ancilla_alpha   = 0.7
 # seed            = 7697
-seed            = 53
+seed            = 42
 noise_options = [
-    [0.5, "amplitude_damping", 1.0],
-    [0.5, "phase_damping", 1.0],
+    [0.3, "amplitude_damping", 0.1],
+    [0.7, "phase_damping", 0.1],
 ]
 real_noise = "amplitude_damping"
 correlated_noise = true
