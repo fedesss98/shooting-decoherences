@@ -96,6 +96,8 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   length(state.noise_options) == 2 || error("This workflow currently supports exactly 2 noise options")
 
   Ox = config.real_noise.supermap_noise
+  O1 = state.noise_options[1].supermap_noise
+  O2 = state.noise_options[2].supermap_noise
   Nx = config.real_noise.supermap
   N1 = state.noise_options[1].supermap
   N2 = state.noise_options[2].supermap
@@ -121,8 +123,8 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
 
   n_subsystems = config.correlated_noise ? 1 : config.n_qubits
   rho_to_rec_ = apply_channel(real_kraus, rho_to_rec_, n_subsystems; extra_dims=da)
-  rho1_ = apply_channel(real_kraus, rho1_, n_subsystems; extra_dims=da)
-  rho2_ = apply_channel(real_kraus, rho2_, n_subsystems; extra_dims=da)
+  rho1_ = apply_channel(option_kraus[1], rho1_, n_subsystems; extra_dims=da)
+  rho2_ = apply_channel(option_kraus[2], rho2_, n_subsystems; extra_dims=da)
 
   Xi = kraus_to_superop(compose_kraus(real_kraus, model.kraus_fwd))
   Xi1 = kraus_to_superop(compose_kraus(option_kraus[1], model.kraus_fwd))
@@ -168,9 +170,12 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   push!(logs.fidelities, fid_initial)
   push!(logs.choice_history, state.choice.current)
 
-  config.real_noise.supermap = P * Nx
-  state.noise_options[1].supermap = P * N1
-  state.noise_options[2].supermap = P * N2
+  # Update the noise options for the next iteration, 
+  #  with the past Petz recovery applied 
+  #  and the next noise to be applied
+  config.real_noise.supermap = Ox * P * Nx
+  state.noise_options[1].supermap = O1 * P * N1
+  state.noise_options[2].supermap = O2 * P * N2
 
   @debug "Current choice" state.choice.current
 
