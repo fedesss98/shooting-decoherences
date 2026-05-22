@@ -9,6 +9,7 @@ function discrimin(ρ_test, ρ1, ρ2, ds, da, q1::Real=0.5, q2::Real=0.5, tol=1e
   η_test = ptrace_sys(ρ_test, ds, da)
   η1 = ptrace_sys(ρ1, ds, da)
   η2 = ptrace_sys(ρ2, ds, da)
+
   Δη = q1 * η1 - q2 * η2
 
   eigen_decomp = eigen(Hermitian(Δη))
@@ -55,6 +56,8 @@ function collapse_map(input_state, output_state)
   q            = clean_eigenvalues(eigen_decomp.values)
   phi_out      = eigen_decomp.vectors
 
+  # @debug "Stochastic projection probabilities" p q
+
   basis = Matrix{ComplexF64}(I, d, d)
   U1 = stochastic_projection(psi_in, basis)
   superop .+= kron(conj(U1), U1)
@@ -90,6 +93,7 @@ function update_noise_guess!(state::RecoveryState, povm::Int)
   end
   push!(state.choice.history, state.choice.current)
   return nothing
+
 end
 
 function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConfig, logs::RecoveryLogs)
@@ -133,6 +137,7 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   q1 = state.noise_options[1].probability
   q2 = state.noise_options[2].probability
   w, Πs = discrimin(rho_to_rec_, rho1_, rho2_, ds, da, q1, q2)
+  @debug "Discrimination probabilities" w
   povm = sample(config.rng, [1, 2], Weights(w))
 
   rho_to_rec = ptrace_ancilla(collapse_state(rho_to_rec_, Πs[povm]), ds, da)
@@ -152,6 +157,12 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   P = kraus_to_superop(model.kraus_rec)
 
   rho_rec, _ = apply_collision(model, rho_to_rec; trace=true)
+  rho_rec_1, _ = apply_collision(model1, rho_to_rec; trace=true)
+  rho_rec_2, _ = apply_collision(model2, rho_to_rec; trace=true)
+
+  @debug "F if recover 1 = " fidelity(state.ρ0, rho_rec_1)
+  @debug "F if recover 2 = " fidelity(state.ρ0, rho_rec_2)
+
   fid_initial = fidelity(state.ρ0, rho_rec)
   fid_track = fidelity(state.ρ0, rho_free)
 
