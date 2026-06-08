@@ -93,7 +93,7 @@ See for example
     https://docs.pennylane.ai/en/stable/code/api/pennylane.BitFlip.html
 """
 function get_bitflip_operators(gamma, t; n_qubits=1)
-    p = (1.0 - exp(-gamma*t)) / 2.0
+    p = (1.0 - exp(-gamma*t))
 
     K_no_flip = sqrt(1.0 - p) * foldl(kron, [I2 for _ in 1:n_qubits])
     K_all_flip = sqrt(p) * foldl(kron, [X for _ in 1:n_qubits])
