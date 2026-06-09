@@ -130,10 +130,14 @@ function make_ancilla_state(kind::String, alpha::Float64)::Matrix{ComplexF64}
         return Matrix{ComplexF64}(ancilla_thermal_qubit(alpha; T=ComplexF64))
     elseif kind == "ground_qubit"
         return Matrix{ComplexF64}(ancilla_ground_state(ComplexF64, 2))
+    elseif kind == "mixture"
+        η = [[alpha 0]; [0 1-alpha]]
+        return Matrix{ComplexF64}(η)
     else
         throw(ArgumentError("Unsupported ancilla_state: $kind"))
     end
 end
+
 
 function make_collision_unitary(kind::String, ds::Int, da::Int)::Matrix{ComplexF64}
     if kind == "swap"
@@ -215,6 +219,31 @@ function make_reference_state(kind::String, n_qubits::Int, beta::Float64, rng)
         return codespace_dm(n_qubits, 0.6, 0.4)
     else
         throw(ArgumentError("Unsupported starting state: $kind"))
+    end
+end
+
+function make_reference_state(params::Dict, n_qubits::Int, beta::Float64, rng)
+    n_qubits > 1 && throw(ArgumentError("Input state with angles is only supported for single qubit systems"))
+    if haskey(params, "rx") && haskey(params, "ry") && haskey(params, "rz")
+        rx = params["rx"]
+        ry = params["ry"]
+        rz = params["rz"]
+        ρ = 0.5 * [
+            [1 + rz         rx - im * ry]; 
+            [rx + ry * im   1 - rz      ]
+        ]
+        return ρ
+    elseif haskey(params, "rx2") && haskey(params, "ry2") && haskey(params, "rz2")
+        rx = sqrt(params["rx2"])
+        ry = sqrt(params["ry2"])
+        rz = sqrt(params["rz2"])
+        ρ = 0.5 * [
+            [1 + rz         rx - im * ry]; 
+            [rx + ry * im   1 - rz      ]
+        ]
+        return ρ
+    else
+        throw(ArgumentError("Invalid starting_state parameters. Expected keys: 'rx', 'ry', 'rz' or 'rx2', 'ry2', 'rz2'"))
     end
 end
 
