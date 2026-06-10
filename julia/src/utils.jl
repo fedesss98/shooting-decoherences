@@ -335,7 +335,7 @@ end
 Route to the correct Kraus operators given the name of the noise.
 The output is a List of Kraus operators.
 """
-function get_kraus_operators(noise, gamma, t; n_qubits=1)
+function get_kraus_operators(noise, gamma, t; rng, n_qubits=1)
   if noise == "amplitude_damping"
     return get_amplitudedamping_operators(gamma, t; n_qubits=n_qubits)
   elseif noise == "phase_damping"
@@ -344,6 +344,8 @@ function get_kraus_operators(noise, gamma, t; n_qubits=1)
     return get_bitflip_operators(gamma, t; n_qubits=n_qubits)
   elseif noise == "depolarizing"
     return get_depolarizing_operators(gamma, t; n_qubits=n_qubits)
+  elseif noise == "random"
+    return get_random_operators(;rng=rng, n_qubits=n_qubits)
   else
     error("Unknown noise model: $noise")
   end

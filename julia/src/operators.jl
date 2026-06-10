@@ -1,3 +1,4 @@
+
 const I2 = ComplexF64[1.0+0.0im 0.0; 0.0 1.0]
 const Z  = ComplexF64[1.0+0.0im 0.0; 0.0 -1.0]
 const X  = ComplexF64[0.0im 1.0; 1.0 0.0]
@@ -9,6 +10,46 @@ Returns the n-fold tensor product of A with itself, i.e. A ⊗ A ⊗ ... ⊗ A (
 function tensor_power(A, n::Int)
     @assert n ≥ 1
     return foldl(kron, [A for _ in 1:n])
+end
+
+
+function random_complex_matrix(rng, n, m)
+    return (randn(rng, n, m) .+ im .* randn(rng, n, m)) ./ sqrt(2)
+end
+
+function invsqrt_hermitian(A)
+    F = eigen(Hermitian(A))
+
+    vals = F.values
+    vecs = F.vectors
+
+    return vecs * Diagonal(1 ./ sqrt.(vals)) * vecs'
+end
+
+"""
+    get_random_operators(seed; n_qubits=1)
+Generate a set of 2 * 2^n_qubits random operators (matrices),
+then normalize them so that their Σᵢ Kᵢ†Kᵢ = 1
+`rng`: seeded random number generator for reproducible results
+"""
+function get_random_operators(rng::AbstractRNG; n_qubits=1)
+    n_kraus = 2 * 2^n_qubits
+    As = [random_complex_matrix(rng, 2^n_qubits, 2^n_qubits) for _ in 1:n_kraus]
+
+    # Compute their length S = Σᵢ Aᵢ†Aᵢ
+    S = zeros(ComplexF64, 2, 2)
+
+    for A in As
+        S += A' * A
+    end
+
+    # Invert the normalization factor
+    S_inv_half = invsqrt_hermitian(S)
+
+    # Normalize the Kraus operators
+    Ks = [A * S_inv_half for A in As]
+
+    return Ks
 end
 
 
