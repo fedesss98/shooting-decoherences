@@ -11,13 +11,18 @@ function discrimin(ρ_test, ρ1, ρ2, ds, da, q1::Real=0.5, q2::Real=0.5, tol=1e
   η2 = ptrace_sys(ρ2, ds, da)
   Δη = q1 * η1 - q2 * η2
 
+  # Early exit: states are indistinguishable, return uniform
+  if norm(Δη) < tol
+      return [0.5, 0.5], [0.5*I(da), 0.5*I(da)]
+  end
+
   eigen_decomp = eigen(Hermitian(Δη))
   eigenvalues = eigen_decomp.values
   eigenvectors = eigen_decomp.vectors
 
   Π1 = zeros(ComplexF64, da, da)
   for i in eachindex(eigenvalues)
-    if abs(eigenvalues[i]) > tol
+    if eigenvalues[i] > tol
       v = eigenvectors[:, i]
       Π1 += v * v'
     end
@@ -101,9 +106,9 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
     N1 = I(size(config.real_noise.supermap)[1])
     N2 = I(size(config.real_noise.supermap)[1])
   else
-  Nx = config.real_noise.supermap
-  N1 = state.noise_options[1].supermap
-  N2 = state.noise_options[2].supermap
+    Nx = config.real_noise.supermap
+    N1 = state.noise_options[1].supermap
+    N2 = state.noise_options[2].supermap
   end
 
   ds = 2^config.n_qubits
@@ -127,7 +132,7 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   rho_to_rec_ = apply_collision(model, rho_to_rec; ancilla_state=η, trace=false)
   rho1_ = apply_collision(model, rho1; ancilla_state=η, trace=false)
   rho2_ = apply_collision(model, rho2; ancilla_state=η, trace=false)
-
+  
   # Apply noise only to the system
   n_subsystems = config.correlated_noise ? 1 : config.n_qubits
   rho_to_rec_ = apply_channel(real_kraus, rho_to_rec_, n_subsystems; extra_dims=da)
