@@ -132,7 +132,7 @@ to run the recovery algorithm: configuration, initial state, and logs.
 function load_configuration(config_file="./configs/config.toml")
     cfg = TOML.parsefile(config_file)
     recovery_cfg  = parse_recovery_config(cfg)
-    noise_options  = parse_noise_options(cfg, recovery_cfg.sigma, recovery_cfg.dt)
+    noise_options  = parse_noise_options(cfg, recovery_cfg.sigma, recovery_cfg.dt, recovery_cfg.rng)
     @debug "Parsed Noise Options: " noise_options
     recovery_state = initialize_recovery_state(recovery_cfg, noise_options)
     return recovery_cfg, recovery_state, RecoveryLogs()
