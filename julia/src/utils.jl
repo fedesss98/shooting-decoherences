@@ -369,10 +369,22 @@ function embed_state(ρ, d_target)
     return ρ_out
 end
 
+function embed_operator(op::Matrix, target_index::Int, n::Int)
+    I2 = [1.0 0.0; 0.0 1.0] # 2x2 Identity
+    
+    # Start the Kronecker product chain
+    result = (target_index == 1) ? op : I2
+    for i in 2:n
+        next_op = (i == target_index) ? op : I2
+        result = kron(result, next_op)
+    end
+    return result
+end
+
 """
   stochastic_transition(p, q; A=nothing, tol=1e-12)
-Given two probability distributions p and q, construct a stochastic transition matrix T such that T*p = q.
-This is done by first constructing a transport plan R = q*p' + A, 
+Given two probability distributions p and q, construct a stochastic transition matrix T such that T * p = q.
+This is done by first constructing a transport plan R = q * p' + A, 
 where A is an optional adjustment matrix to ensure positivity and stability.
 Then, T is obtained by normalizing the columns of R by p. 
 If p[i] is zero, the corresponding column of T is set to q (arbitrary stochastic column, 
@@ -380,7 +392,7 @@ since it does not affect the result).
 The function also includes checks to ensure that R is a valid transport plan
 (non-negative and with correct marginals), and that T is a valid stochastic matrix.
 """
-function stochastic_transition(p, q; A=nothing, tol=1e-12, checktol=1e-8)
+function stochastic_transition(p, q; A=nothing, tol=1e-12, checktol=1e-12)
     p = collect(float.(p))
     q = collect(float.(q))
 

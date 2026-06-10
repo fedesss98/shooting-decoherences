@@ -47,7 +47,7 @@ function get_dual_intervals(mask::Vector{Int})
     return intervals_a, intervals_b
 end
 
-function plot_autorecovery(state, cfg, logs; show=true, save=false, kwargs...)
+function plot_autorecovery(state, cfg, logs; choices=true, show=true, save=false, kwargs...)
     ylims = get(kwargs, :ylims, [0.8, 1.01])
     xlims = get(kwargs, :xlims, [0, cfg.n_timesteps])
     size = get(kwargs, :size, (1200, 400))
@@ -70,24 +70,27 @@ function plot_autorecovery(state, cfg, logs; show=true, save=false, kwargs...)
         bottom_margin=9mm
     )
 
-    label_a = 0
-    label_b = 0
-    vline!(p, collect(0:length(logs.ref_fidelities)) .+ 1.2, linestyle=:dash, color=:lightgrey, lw=1, label=nothing)
+    if choices
+        label_a = 0
+        label_b = 0
+        vline!(p, collect(0:length(logs.ref_fidelities)) .+ 1.2, linestyle=:dash, color=:lightgrey, lw=1, label=nothing)
 
-    for i in 1:(length(state.choice.history)-1)
-        current_choice = state.choice.history[i]
-        band_color = state.choice.history[i] == 1 ? :lightblue : :lightgreen
-        if label_a == 0 && current_choice == 1
-            label = "$(noise_labels[1]) Recovery"
-            label_a += 1
-        elseif label_b == 0 && current_choice == 2
-            label = "$(noise_labels[2]) Recovery"
-            label_b += 1
-        else
-            label = nothing
+        for i in 1:(length(state.choice.history)-1)
+            current_choice = state.choice.history[i]
+            band_color = state.choice.history[i] == 1 ? :lightblue : :lightgreen
+            if label_a == 0 && current_choice == 1
+                label = "$(noise_labels[1]) Recovery"
+                label_a += 1
+            elseif label_b == 0 && current_choice == 2
+                label = "$(noise_labels[2]) Recovery"
+                label_b += 1
+            else
+                label = nothing
+            end
+            vspan!(p, [i + 0.2, i + 1.2], color=band_color, alpha=0.2, label=label)
         end
-        vspan!(p, [i + 0.2, i + 1.2], color=band_color, alpha=0.2, label=label)
     end
+    
     scatter!(
         [[1.0; logs.ref_fidelities] [1.0; logs.fidelities]],
         labels=["Free evolution" "Recovered Evolution"],

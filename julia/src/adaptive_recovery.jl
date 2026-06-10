@@ -96,45 +96,61 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   length(state.noise_options) == 2 || error("This workflow currently supports exactly 2 noise options")
 
   Ox = config.real_noise.supermap_noise
+  if step == 1
+    Nx = I(size(config.real_noise.supermap)[1])
+    N1 = I(size(config.real_noise.supermap)[1])
+    N2 = I(size(config.real_noise.supermap)[1])
+  else
   Nx = config.real_noise.supermap
   N1 = state.noise_options[1].supermap
   N2 = state.noise_options[2].supermap
+  end
 
   ds = 2^config.n_qubits
 
+  # ======================================
+  # Step 1: Apply noise only on the reference state to track the fidelity without recovery
   rho_free = unvec((Ox)^step * vec(state.ρ0))
   rho_to_rec = unvec(Nx * vec(state.ρ0))
   rho1 = unvec(N1 * vec(state.ρ0))
   rho2 = unvec(N2 * vec(state.ρ0))
 
+  # ======================================
+  # Step 2: Informative collision
   η = config.ancilla_state
   da = size(η, 1)
   model = CollisionModel(config.collision_unitary, config.sigma, ds, da, ancilla_state=η)
   real_kraus = config.real_noise.extended_kraus
   option_kraus = [noise.extended_kraus for noise in state.noise_options]
 
+  # Get the composite state system+ancilla
   rho_to_rec_ = apply_collision(model, rho_to_rec; ancilla_state=η, trace=false)
   rho1_ = apply_collision(model, rho1; ancilla_state=η, trace=false)
   rho2_ = apply_collision(model, rho2; ancilla_state=η, trace=false)
 
+  # Apply noise only to the system
   n_subsystems = config.correlated_noise ? 1 : config.n_qubits
   rho_to_rec_ = apply_channel(real_kraus, rho_to_rec_, n_subsystems; extra_dims=da)
-  rho1_ = apply_channel(real_kraus, rho1_, n_subsystems; extra_dims=da)
-  rho2_ = apply_channel(real_kraus, rho2_, n_subsystems; extra_dims=da)
+  rho1_ = apply_channel(option_kraus[1], rho1_, n_subsystems; extra_dims=da)
+  rho2_ = apply_channel(option_kraus[2], rho2_, n_subsystems; extra_dims=da)
 
+  # Create the supermap corresponding to the collision followed by the noise
   Xi = kraus_to_superop(compose_kraus(real_kraus, model.kraus_fwd))
   Xi1 = kraus_to_superop(compose_kraus(option_kraus[1], model.kraus_fwd))
   Xi2 = kraus_to_superop(compose_kraus(option_kraus[2], model.kraus_fwd))
 
+  # ======================================
+  # Step 3: Measurement
   q1 = state.noise_options[1].probability
   q2 = state.noise_options[2].probability
   w, Πs = discrimin(rho_to_rec_, rho1_, rho2_, ds, da, q1, q2)
   povm = sample(config.rng, [1, 2], Weights(w))
 
+  # Collapse the system and trace out the ancilla
   rho_to_rec = ptrace_ancilla(collapse_state(rho_to_rec_, Πs[povm]), ds, da)
   rho1 = ptrace_ancilla(collapse_state(rho1_, Πs[povm]), ds, da)
   rho2 = ptrace_ancilla(collapse_state(rho2_, Πs[povm]), ds, da)
-
+  # Get the CPTP map corresponding to the collapse
   Cx = collapse_map(ptrace_ancilla(rho_to_rec_, ds, da), rho_to_rec)
   C1 = collapse_map(ptrace_ancilla(rho1_, ds, da), rho1)
   C2 = collapse_map(ptrace_ancilla(rho2_, ds, da), rho2)
@@ -143,15 +159,25 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   N1 = C1 * Xi1 * N1
   N2 = C2 * Xi2 * N2
 
+  # ======================================
+  # Step 4: Update noise guess and recovery map
   update_noise_guess!(state, povm)
   model = CollisionModel(state.choice.current == 1 ? N1 : N2, config.sigma)
   P = kraus_to_superop(model.kraus_rec)
 
+  # ======================================
+  # Step 5: Recovery
   rho_rec, _ = apply_collision(model, rho_to_rec; trace=true)
   fid_initial = fidelity(state.ρ0, rho_rec)
   fid_track = fidelity(state.ρ0, rho_free)
 
-  push!(logs.maps, (Nx=copy(Nx), N1=copy(N1), N2=copy(N2), P=copy(P)))
+  # ======================================
+  # Step 6: Updates for the next iteration
+  # Save superoperators at current step
+  push!(logs.maps, (
+    Nx=copy(Nx), N1=copy(N1), N2=copy(N2), 
+    P=copy(P), Cx=copy(Cx), Xi=copy(Xi)
+    ))
   push!(logs.ref_fidelities, fid_track)
   push!(logs.fidelities, fid_initial)
   push!(logs.choice_history, state.choice.current)
