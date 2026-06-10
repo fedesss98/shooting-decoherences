@@ -95,7 +95,9 @@ mutable struct RecoveryState
 end
 
 # Define the type for logging the supermaps at each step (using a NamedTuple for clarity)
-const SupermapsLogged = @NamedTuple{Nx::Matrix{ComplexF64}, N1::Matrix{ComplexF64}, N2::Matrix{ComplexF64}, P::Matrix{ComplexF64}}
+const SupermapsLogged = @NamedTuple{
+    Nx::Matrix{ComplexF64}, N1::Matrix{ComplexF64}, N2::Matrix{ComplexF64}, 
+    P::Matrix{ComplexF64}, Cx::Matrix{ComplexF64}, Xi::Matrix{ComplexF64}}
 # Logs for tracking evolution of metrics
 struct RecoveryLogs
     fidelities::Vector{Float64}
