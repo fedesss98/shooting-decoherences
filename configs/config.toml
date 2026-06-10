@@ -40,7 +40,7 @@
 #
 
 
-name            = "1qbt_btfp_amp_auto"
+name            = "1qbt_rand_amp_auto"
 n_qubits        = 1
 beta            = 1.0
 dt              = 0.031415926
@@ -57,5 +57,5 @@ noise_options = [
     [0.5, "random", 1.0],
     [0.5, "amplitude_damping", 1.0],
 ]
-real_noise = "amplitude_damping"
+real_noise = "random"
 correlated_noise = false

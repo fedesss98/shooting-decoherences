@@ -12,10 +12,24 @@ mutable struct NoiseObj
     supermap_noise::Matrix{ComplexF64}
     supermap::Matrix{ComplexF64}
 end
-function NoiseObj(noise::String, p::Float64, sigma::Matrix{T}, gamma::Float64, t::Float64; rng::AbstractRNG = nothing, correlated::Bool = false) where T
+function NoiseObj(
+    noise::String, 
+    p::Float64, 
+    sigma::Matrix{T}, 
+    gamma::Float64, 
+    t::Float64; 
+    rng::Union{Nothing, AbstractRNG} = nothing, 
+    correlated::Bool = false
+) where T
     n_qubits = Int(log2(size(sigma, 1)))
     affected_qubits = correlated ? n_qubits : 1
-    kraus = get_kraus_operators(noise, gamma, t; rng=rng, n_qubits=affected_qubits)
+    if occursin("random", noise)
+        rng === nothing && throw(ArgumentError("Noise type $noise requires a RNG."))
+        kraus = get_kraus_operators(noise, gamma, t; rng=rng, n_qubits=affected_qubits)
+    else
+        kraus = get_kraus_operators(noise, gamma, t; n_qubits=affected_qubits)
+    end
+
     extended_kraus = expand_kraus_operators(kraus, n_qubits)
     model = CollisionModel(extended_kraus, sigma)
     M_petz, M_noise = build_superoperators(model)
@@ -169,6 +183,7 @@ function parse_recovery_config(cfg::Dict)::RecoveryConfig
     correlated_noise = get(cfg, "correlated_noise", false)
 
     rng           = make_rng(seed)
+    @debug "RNG Type" typeof(rng)
     experiment_dir = setup_experiment_dir(name, cfg)
     setup_logger(joinpath(experiment_dir, "debug.log"))
 
@@ -254,14 +269,7 @@ const DEFAULT_NOISE_OPTIONS = [
     (0.40, "dephasing", 1.0),
 ]
 
-function parse_noise_options(cfg::Dict, sigma, dt::Float64)::Vector{NoiseObj}
-    raw = get(cfg, "noise_options", DEFAULT_NOISE_OPTIONS)
-    correlated_noise = get(cfg, "correlated_noise", false)
-    return [NoiseObj(name, prob, sigma, gamma, dt; correlated=correlated_noise)
-            for (prob, name, gamma) in raw]
-end
-
-function parse_noise_options(cfg::Dict, sigma, dt::Float64, rng::AbstractRNG)::Vector{NoiseObj}
+function parse_noise_options(cfg::Dict, sigma, dt::Float64, rng::Union{AbstractRNG, Nothing} = nothing)::Vector{NoiseObj}
     raw = get(cfg, "noise_options", DEFAULT_NOISE_OPTIONS)
     correlated_noise = get(cfg, "correlated_noise", false)
     return [NoiseObj(name, prob, sigma, gamma, dt; rng=rng, correlated=correlated_noise)
