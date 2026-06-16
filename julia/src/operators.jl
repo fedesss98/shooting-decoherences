@@ -2,6 +2,7 @@
 const I2 = ComplexF64[1.0+0.0im 0.0; 0.0 1.0]
 const Z  = ComplexF64[1.0+0.0im 0.0; 0.0 -1.0]
 const X  = ComplexF64[0.0im 1.0; 1.0 0.0]
+const Y  = ComplexF64[0.0 -im; im 0.0]
 
 """
     tensor_power(A, n)
@@ -70,7 +71,7 @@ For n_qubits > 1, this describes fully correlated Pauli noise:
 function get_depolarizing_operators(gamma, t; n_qubits=1)
     p = 1.0 - exp(-gamma * t)
 
-    K0 = sqrt(1.0 - p) * tensor_power(Id2, n_qubits)
+    K0 = sqrt(1.0 - p) * tensor_power(I2, n_qubits)
     K1 = sqrt(p / 3.0) * tensor_power(X, n_qubits)
     K2 = sqrt(p / 3.0) * tensor_power(Y, n_qubits)
     K3 = sqrt(p / 3.0) * tensor_power(Z, n_qubits)
