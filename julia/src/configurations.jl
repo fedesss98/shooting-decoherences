@@ -55,6 +55,7 @@ struct RecoveryConfig
     name::String
     experiment_dir::String
     sigma::Matrix{ComplexF64}
+    sigma_mixture::Float64
     recovery_type::String
     real_noise::NoiseObj
     n_qubits::Int
@@ -69,12 +70,16 @@ struct RecoveryConfig
     ancilla_state::Matrix{ComplexF64}
     collision_unitary::Matrix{ComplexF64}
     correlated_noise::Bool
+    plots_options::Dict{Symbol,Any}
+    noise_options::Vector{NoiseObj}
+    real_noise_idx::Int
 end
 
 function RecoveryConfig(
     name::String,
     experiment_dir::String,
     sigma::Matrix{ComplexF64},
+    sigma_mixture::Float64,
     recovery_type::String,
     real_noise::NoiseObj,
     n_qubits::Int,
@@ -87,6 +92,9 @@ function RecoveryConfig(
     ancilla_state_name::String="thermal_qubit",
     collision_unitary_name::String="swap",
     correlated_noise::Bool=false,
+    plots_options::Dict{Symbol,Any}=Dict{Symbol,Any}(),
+    noise_options::Union{Nothing,Vector{NoiseObj}}=nothing,
+    real_noise_idx::Int=0
 )
     ancilla_state = make_ancilla_state(ancilla_state_name, ancilla_alpha)
     collision_unitary = make_collision_unitary(
@@ -96,9 +104,11 @@ function RecoveryConfig(
     )
 
     return RecoveryConfig(
-        name, experiment_dir, sigma, recovery_type, real_noise,
+        name, experiment_dir, sigma, sigma_mixture, recovery_type, real_noise,
         n_qubits, n_timesteps, n_states, seed, rng, dt, ancilla_alpha,
-        ancilla_state_name, collision_unitary_name, ancilla_state, collision_unitary, correlated_noise
+        ancilla_state_name, collision_unitary_name, ancilla_state, collision_unitary,
+        correlated_noise, plots_options, isnothing(noise_options) ? NoiseObj[real_noise] : noise_options,
+        real_noise_idx
     )
 end
 
@@ -143,7 +153,7 @@ RecoveryLogs() = RecoveryLogs(Float64[], Float64[], Int[], SupermapsLogged[])
 Reads a TOML configuration file and initializes all components needed
 to run the recovery algorithm: configuration, initial state, and logs.
 """
-function load_configuration(config_file="./configs/config.toml")
+function load_configuration(config_file="./configs/config.toml"; debug::Bool=false)
     cfg = TOML.parsefile(config_file)
     recovery_cfg  = parse_recovery_config(cfg)
     noise_options  = parse_noise_options(cfg, recovery_cfg.sigma, recovery_cfg.dt, recovery_cfg.rng)
@@ -161,7 +171,7 @@ function make_ancilla_state(kind::String, alpha::Float64)::Matrix{ComplexF64}
     elseif kind == "ground_qubit"
         return Matrix{ComplexF64}(ancilla_ground_state(ComplexF64, 2))
     elseif kind == "mixture"
-        η = [[alpha 0]; [0 1-alpha]]
+        η = [[alpha 0]; [0 1 - alpha]]
         return Matrix{ComplexF64}(η)
     else
         throw(ArgumentError("Unsupported ancilla_state: $kind"))
@@ -181,27 +191,28 @@ function make_collision_unitary(kind::String, ds::Int, da::Int)::Matrix{ComplexF
 end
 
 
-function parse_recovery_config(cfg::Dict)::RecoveryConfig
-    name          = get(cfg, "name",          "test")
-    n_qubits      = get(cfg, "n_qubits",      1)
-    beta          = get(cfg, "beta",          2.0)
-    dt            = get(cfg, "dt",            0.1)
-    ancilla_alpha = get(cfg, "ancilla_alpha", 0.8)
-    ancilla_state_name = get(cfg, "ancilla_state", "thermal_qubit")
-    collision_unitary_name = get(cfg, "collision_unitary", "swap")
-    n_timesteps   = get(cfg, "n_timesteps",   10)
-    n_states      = get(cfg, "n_states",      1)
-    seed          = get(cfg, "seed",          42)
+function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
+    name = get(cfg, "name", "test")
+    n_qubits = get(cfg, "n_qubits", 1)
+    beta = get(cfg, "beta", 2.0)
+    dt = get(cfg, "dt", 0.1)
+    anc_alpha = get(cfg, "ancilla_alpha", 0.8)
+    anc_type = get(cfg, "ancilla_state", "thermal_qubit")
+    collision_type = get(cfg, "collision_unitary", "swap")
+    n_timesteps = get(cfg, "n_timesteps", 10)
+    n_states = get(cfg, "n_states", 1)
+    seed = get(cfg, "seed", 42)
     recovery_type = get(cfg, "recovery_type", "auto")
     starting_state = get(cfg, "starting_state", "thermal")
+    sigma_mixture = get(cfg, "sigma_mixture", 0.5)
     correlated_noise = get(cfg, "correlated_noise", false)
+    plots_options = Dict{Symbol,Any}(Symbol(k) => v for (k, v) in get(cfg, "plots", Dict{String,Any}()))
 
-    rng           = make_rng(seed)
-    @debug "RNG Type" typeof(rng)
+    rng = make_rng(seed)
     experiment_dir = setup_experiment_dir(name, cfg)
     setup_logger(joinpath(experiment_dir, "debug.log"))
 
-    sigma         = make_reference_state(starting_state, n_qubits, beta, rng)
+    sigma = make_reference_state(starting_state, n_qubits, beta, rng)
     noise_options = parse_noise_options(cfg, sigma, dt, rng)
     if get(cfg, "real_noise", nothing) === nothing
         println("No real noise specified in config, sampling from noise options...\n")
@@ -216,17 +227,20 @@ function parse_recovery_config(cfg::Dict)::RecoveryConfig
     end
 
     return RecoveryConfig(
-        name, experiment_dir, sigma, recovery_type, real_noise,
-        n_qubits, n_timesteps, n_states, seed, rng, dt, ancilla_alpha;
-        ancilla_state_name=ancilla_state_name,
-        collision_unitary_name=collision_unitary_name,
-        correlated_noise=correlated_noise
+        name, experiment_dir, sigma, sigma_mixture, recovery_type, real_noise,
+        n_qubits, n_timesteps, n_states, seed, rng, dt, anc_alpha;
+        ancilla_state_name=anc_type,
+        collision_unitary_name=collision_type,
+        correlated_noise=correlated_noise,
+        plots_options=plots_options,
+        noise_options=noise_options,
+        real_noise_idx=real_noise_idx
     )
 end
 
 
 function setup_experiment_dir(name::String, cfg::Dict)::String
-    root_dir       = dirname(dirname(@__DIR__))
+    root_dir = dirname(dirname(@__DIR__))
     experiment_dir = joinpath(root_dir, "experiments", name)
 
     mkpath(joinpath(experiment_dir, "logs"))
@@ -243,6 +257,8 @@ end
 function make_reference_state(kind::String, n_qubits::Int, beta::Float64, rng)
     if kind == "thermal"
         return thermal_state(n_qubits, beta)
+    elseif kind == "thermal_xy"
+        return thermal_state_hopping(n_qubits, beta)
     elseif kind == "random"
         spectrum = 0.1 .+ 0.9 .* rand(rng, 2^n_qubits)
         return rand_state_with_spectrum(spectrum; rng=rng)
@@ -260,8 +276,8 @@ function make_reference_state(params::Dict, n_qubits::Int, beta::Float64, rng)
         ry = params["ry"]
         rz = params["rz"]
         ρ = 0.5 * [
-            [1 + rz         rx - im * ry]; 
-            [rx + ry * im   1 - rz      ]
+            [1 + rz rx - im * ry];
+            [rx + ry * im 1 - rz]
         ]
         return ρ
     elseif haskey(params, "rx2") && haskey(params, "ry2") && haskey(params, "rz2")
@@ -269,8 +285,8 @@ function make_reference_state(params::Dict, n_qubits::Int, beta::Float64, rng)
         ry = sqrt(params["ry2"])
         rz = sqrt(params["rz2"])
         ρ = 0.5 * [
-            [1 + rz         rx - im * ry]; 
-            [rx + ry * im   1 - rz      ]
+            [1 + rz rx - im * ry];
+            [rx + ry * im 1 - rz]
         ]
         return ρ
     else
@@ -297,11 +313,11 @@ end
 
 
 function initialize_recovery_state(cfg::RecoveryConfig, noise_options::Vector{NoiseObj})::RecoveryState
-    ρ0     = make_initial_state(cfg)
+    ρ0 = make_initial_state(cfg)
     choice = make_initial_choice(cfg.rng, noise_options)
 
     noise_guess = deepcopy(noise_options[choice.current])
-    M_total     = noise_guess.supermap_noise
+    M_total = noise_guess.supermap_noise
 
     return RecoveryState(
         copy(ρ0), copy(ρ0), copy(ρ0),
@@ -315,14 +331,20 @@ function make_initial_state(cfg::RecoveryConfig)
         return ψ * ψ'
     elseif cfg.recovery_type == "auto"
         return copy(cfg.sigma)
-    elseif cfg.recovery_type == "codespace"
+    elseif cfg.recovery_type == "codespace" || cfg.recovery_type == "codespace_xy"
         sigma = cfg.sigma
         p = rand()
-        max_x = p * (1-p)  # Maximum allowed magnitude for |x|^2
+        max_x = p * (1 - p)  # Maximum allowed magnitude for |x|^2
         radius = sqrt(rand() * max_x)
         x = radius * exp(2π * im * rand())
         ρ = codespace_dm(cfg.n_qubits, p, x)
-        ρ0 = ρ + sigma
+        ρ = if cfg.recovery_type == "codespace"
+            codespace_dm(cfg.n_qubits, p, x)
+        else
+            single_excitation_dm(cfg.n_qubits, p, x)
+        end
+        r = cfg.sigma_mixture
+        ρ0 = (1 - r) * ρ + r * sigma
         ρ0 = ρ0 / tr(ρ0)  # Normalize to ensure it's a valid density matrix
         return ρ0
     elseif cfg.recovery_type == "inputstate"
