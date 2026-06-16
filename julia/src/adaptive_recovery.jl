@@ -107,7 +107,7 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   length(state.noise_options) == 2 || error("This workflow currently supports exactly 2 noise options")
 
   Ox = config.real_noise.supermap_noise
-  if step == 1
+  if step == 1 
     Nx = I(size(config.real_noise.supermap)[1])
     N1 = I(size(config.real_noise.supermap)[1])
     N2 = I(size(config.real_noise.supermap)[1])
@@ -196,8 +196,6 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   config.real_noise.supermap = P * Nx
   state.noise_options[1].supermap = P * N1
   state.noise_options[2].supermap = P * N2
-
-  @debug "Current choice" state.choice.current
 
   return nothing
 end
