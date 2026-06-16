@@ -18,22 +18,36 @@ function NoiseObj(
     sigma::Matrix{T}, 
     gamma::Float64, 
     t::Float64; 
-    rng::Union{Nothing, AbstractRNG} = nothing, 
-    correlated::Bool = false
+    rng::Union{Nothing,AbstractRNG}=nothing,
+    correlated::Bool=false
 ) where T
     n_qubits = Int(log2(size(sigma, 1)))
-    affected_qubits = correlated ? n_qubits : 1
-    if occursin("random", noise)
-        rng === nothing && throw(ArgumentError("Noise type $noise requires a RNG."))
-        kraus = get_kraus_operators(noise, gamma, t; rng=rng, n_qubits=affected_qubits)
-    else
-        kraus = get_kraus_operators(noise, gamma, t; n_qubits=affected_qubits)
-    end
 
-    extended_kraus = expand_kraus_operators(kraus, n_qubits)
+    # kraus is always the single-qubit channel. extended_kraus is the
+    # full-system channel used by the recovery protocol.
+    kraus = _make_noise_kraus(noise, gamma, t; rng=rng, n_qubits=1)
+    extended_kraus =
+        correlated && n_qubits > 1 ? _make_correlated_kraus(noise, gamma, t, kraus; rng=rng, n_qubits=n_qubits) :
+        expand_kraus_operators(kraus, n_qubits)
+
     model = CollisionModel(extended_kraus, sigma)
     M_petz, M_noise = build_superoperators(model)
     return NoiseObj(noise, p, kraus, extended_kraus, M_petz, M_noise, M_noise)
+end
+
+function _make_correlated_kraus(noise::String, gamma::Float64, t::Float64, kraus; rng=nothing, n_qubits::Int)
+    if occursin("random", noise) || occursin("general", noise)
+        return correlate_kraus_operators(kraus, n_qubits)
+    end
+    return _make_noise_kraus(noise, gamma, t; rng=rng, n_qubits=n_qubits)
+end
+
+function _make_noise_kraus(noise::String, gamma::Float64, t::Float64; rng=nothing, n_qubits::Int=1)
+    if occursin("random", noise) || occursin("general", noise)
+        rng === nothing && throw(ArgumentError("Noise type $noise requires a RNG."))
+        return get_kraus_operators(noise, gamma, t; rng=rng, n_qubits=n_qubits)
+    end
+    return get_kraus_operators(noise, gamma, t; n_qubits=n_qubits)
 end
 
 # Static Configuration for the setup of the algorithm
