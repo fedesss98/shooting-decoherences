@@ -103,6 +103,36 @@ function update_noise_guess!(state::RecoveryState, povm::Int)
   return nothing
 end
 
+
+function project_to_codespace(rho, n_qubits; real_noise_name="", projection="auto")
+    dim = 2^n_qubits
+
+    P = zeros(ComplexF64, dim, dim)
+    projection_name = projection == "auto" ? (
+        real_noise_name == "bitflip" || real_noise_name == "phase_damping" ? "xy" : "00_11"
+    ) : projection
+
+    if projection_name == "00_11"
+        # For amplitude damping, the code space is spanned by |00> and |11>
+        P[1, 1] = 1.0   # |0...0><0...0|
+        P[dim, dim] = 1.0   # |1...1><1...1|
+    elseif projection_name == "xy"
+        # For bitflip and phase damping, the code space is spanned by |01> and |10>
+        P[2, 2] = 1.0   # |01><01|
+        P[3, 3] = 1.0   # |10><10|
+    else
+        error("Unknown codespace projection: $projection. Use \"auto\", \"00_11\", or \"xy\".")
+    end
+
+    rho_proj = P * rho * P
+    prob = real(tr(rho_proj))
+
+    prob > 0 || throw(ArgumentError("state has zero overlap with the code space"))
+
+    return rho_proj / prob, prob
+end
+
+
 function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConfig, logs::RecoveryLogs)
   length(state.noise_options) == 2 || error("This workflow currently supports exactly 2 noise options")
 
@@ -179,8 +209,29 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   # ======================================
   # Step 5: Recovery
   rho_rec, _ = apply_collision(model, rho_to_rec; trace=true)
-  fid_initial = fidelity(state.ρ0, rho_rec)
-  fid_track = fidelity(state.ρ0, rho_free)
+  rho_initial = state.ρ0
+  prob_codespace = 1.0
+  prob_codespace_free = 1.0
+  prob_codespace_initial = 1.0
+  if config.n_qubits > 1
+    rho_rec, prob_codespace = project_to_codespace(
+      rho_rec, config.n_qubits;
+      real_noise_name=config.real_noise.name,
+      projection=config.codespace_projection
+    )
+    rho_free, prob_codespace_free = project_to_codespace(
+      rho_free, config.n_qubits;
+      real_noise_name=config.real_noise.name,
+      projection=config.codespace_projection
+    )
+    rho_initial, prob_codespace_initial = project_to_codespace(
+      state.ρ0, config.n_qubits;
+      real_noise_name=config.real_noise.name,
+      projection=config.codespace_projection
+    )
+  end
+  fid_initial = fidelity(rho_initial, rho_rec)
+  fid_track = fidelity(rho_initial,  rho_free)
 
   # ======================================
   # Step 6: Updates for the next iteration
@@ -192,6 +243,9 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   push!(logs.ref_fidelities, fid_track)
   push!(logs.fidelities, fid_initial)
   push!(logs.choice_history, state.choice.current)
+  push!(logs.codespace_overlaps[1], prob_codespace)
+  push!(logs.codespace_overlaps[2], prob_codespace_free)
+  push!(logs.codespace_overlaps[3], prob_codespace_initial)
 
   config.real_noise.supermap = P * Nx
   state.noise_options[1].supermap = P * N1

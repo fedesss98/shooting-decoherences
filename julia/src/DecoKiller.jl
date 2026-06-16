@@ -142,6 +142,7 @@ function save_results!(cfg::RecoveryConfig, state::RecoveryState, logs::Recovery
         "real_noise" => cfg.real_noise.name,
         "real_noise_idx" => cfg.real_noise_idx,
         "noise_options" => [n.name for n in state.noise_options],
+        "codespace_projection" => cfg.codespace_projection,
     )
 
     open(meta_file, "w") do io
@@ -165,6 +166,7 @@ function save_results!(cfg::RecoveryConfig, state::RecoveryState, logs::Recovery
         "ref_fidelities" => logs.ref_fidelities,
         "avg_ref_fidelities" => avg_fidelities[1],
         "avg_fidelities" => avg_fidelities[2],
+        "codespace_overlaps" => logs.codespace_overlaps,
         "choice_history" => logs.choice_history,
         "choice_c1" => state.choice.c1,
         "choice_c2" => state.choice.c2,

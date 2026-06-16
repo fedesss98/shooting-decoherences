@@ -73,6 +73,7 @@ struct RecoveryConfig
     plots_options::Dict{Symbol,Any}
     noise_options::Vector{NoiseObj}
     real_noise_idx::Int
+    codespace_projection::String
 end
 
 function RecoveryConfig(
@@ -94,7 +95,8 @@ function RecoveryConfig(
     correlated_noise::Bool=false,
     plots_options::Dict{Symbol,Any}=Dict{Symbol,Any}(),
     noise_options::Union{Nothing,Vector{NoiseObj}}=nothing,
-    real_noise_idx::Int=0
+    real_noise_idx::Int=0,
+    codespace_projection::String="auto"
 )
     ancilla_state = make_ancilla_state(ancilla_state_name, ancilla_alpha)
     collision_unitary = make_collision_unitary(
@@ -108,7 +110,7 @@ function RecoveryConfig(
         n_qubits, n_timesteps, n_states, seed, rng, dt, ancilla_alpha,
         ancilla_state_name, collision_unitary_name, ancilla_state, collision_unitary,
         correlated_noise, plots_options, isnothing(noise_options) ? NoiseObj[real_noise] : noise_options,
-        real_noise_idx
+        real_noise_idx, codespace_projection
     )
 end
 
@@ -140,12 +142,13 @@ const SupermapsLogged = @NamedTuple{
 struct RecoveryLogs
     fidelities::Vector{Float64}
     ref_fidelities::Vector{Float64}
+    codespace_overlaps::Vector{Vector{Float64}}
     choice_history::Vector{Int}
     # This will store NamedTuples containing 4 matrices
     maps::Vector{SupermapsLogged}
 end
 # Constructor to initialize empty logs
-RecoveryLogs() = RecoveryLogs(Float64[], Float64[], Int[], SupermapsLogged[])
+RecoveryLogs() = RecoveryLogs(Float64[], Float64[], [Float64[], Float64[], Float64[]], Int[], SupermapsLogged[])
 
 """
     load_configuration(config_file)
@@ -206,6 +209,7 @@ function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
     starting_state = get(cfg, "starting_state", "thermal")
     sigma_mixture = get(cfg, "sigma_mixture", 0.5)
     correlated_noise = get(cfg, "correlated_noise", false)
+    codespace_projection = get(cfg, "codespace_projection", "auto")
     plots_options = Dict{Symbol,Any}(Symbol(k) => v for (k, v) in get(cfg, "plots", Dict{String,Any}()))
 
     rng = make_rng(seed)
@@ -234,7 +238,8 @@ function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
         correlated_noise=correlated_noise,
         plots_options=plots_options,
         noise_options=noise_options,
-        real_noise_idx=real_noise_idx
+        real_noise_idx=real_noise_idx,
+        codespace_projection=codespace_projection
     )
 end
 
