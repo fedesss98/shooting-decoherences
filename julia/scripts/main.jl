@@ -36,6 +36,8 @@ function main(args=ARGS)
         println("Average final fidelity (with recovery): $(round(avg_fids[2][end], digits=6))")
         println("Average final fidelity (no recovery):  $(round(avg_fids[1][end], digits=6))")
     end
+
+    return cfg, logs, avg_fids
 end
 
 main()
