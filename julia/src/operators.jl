@@ -143,6 +143,59 @@ function get_bitflip_operators(gamma, t; n_qubits=1)
     return [K_no_flip, K_all_flip]
 end
 
+
+
+function normalize_kraus_operators(kraus; tol=1e-12)
+    dim = size(kraus[1], 1)
+    S = zeros(ComplexF64, dim, dim)
+
+    for K in kraus
+        size(K) == (dim, dim) ||
+            throw(ArgumentError("All Kraus operators must have size $dim × $dim"))
+        S += K' * K
+    end
+
+    F = eigen(Hermitian(S))
+    vals = real.(F.values)
+    if any(vals .<= tol)
+        throw(ArgumentError("Kraus normalization matrix is singular or ill-conditioned"))
+    end
+
+    S_inv_half = F.vectors * Diagonal(1 ./ sqrt.(vals)) * F.vectors'
+    return [Matrix{ComplexF64}(K) * S_inv_half for K in kraus]
+end
+
+"""
+    correlate_kraus_operators(kraus, n_qubits)
+
+Build a correlated full-system channel from one-qubit Kraus operators by using
+the same Kraus label on every qubit, then renormalizing the full-system Kraus
+list so that Σᵢ Kᵢ†Kᵢ = I.
+"""
+function correlate_kraus_operators(kraus, n_qubits::Int)
+    n_qubits >= 1 || throw(ArgumentError("n_qubits must be at least 1"))
+    n_qubits == 1 && return [Matrix{ComplexF64}(K) for K in kraus]
+
+    all(size(K) == (2, 2) for K in kraus) ||
+        throw(ArgumentError("correlated Kraus construction expects one-qubit operators"))
+
+    raw_correlated = [tensor_power(K, n_qubits) for K in kraus]
+    return normalize_kraus_operators(raw_correlated)
+end
+
+"""
+    get_random_operators(seed; n_qubits=1)
+Generate a set of 2 * 2^n_qubits random operators (matrices),
+then normalize them so that their Σᵢ Kᵢ†Kᵢ = 1
+`rng`: seeded random number generator for reproducible results
+"""
+function get_random_operators(rng::AbstractRNG; n_qubits=1)
+    n_kraus = 2 * 2^n_qubits
+    As = [random_complex_matrix(rng, 2^n_qubits, 2^n_qubits) for _ in 1:n_kraus]
+
+    return normalize_kraus_operators(As)
+end
+
 """
     apply_channel(kraus, ρ)
 """
@@ -151,7 +204,7 @@ function apply_channel(kraus, ρ)
 end
 
 """
-    expand_kraus_operators(kraus, n_qubits)
+    expand_kraus_operators(kraus, n_qubits, correlated)
 
 Return Kraus operators acting on the full n-qubit system. Single-qubit
 operators are expanded as independent tensor-product noises on every qubit.
