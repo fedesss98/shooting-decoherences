@@ -26,32 +26,33 @@ function invsqrt_hermitian(A)
     return vecs * Diagonal(1 ./ sqrt.(vals)) * vecs'
 end
 
-"""
-    get_random_operators(seed; n_qubits=1)
-Generate a set of 2 * 2^n_qubits random operators (matrices),
-then normalize them so that their Σᵢ Kᵢ†Kᵢ = 1
-`rng`: seeded random number generator for reproducible results
-"""
-function get_random_operators(rng::AbstractRNG; n_qubits=1)
-    n_kraus = 2 * 2^n_qubits
-    As = [random_complex_matrix(rng, 2^n_qubits, 2^n_qubits) for _ in 1:n_kraus]
 
-    # Compute their length S = Σᵢ Aᵢ†Aᵢ
-    S = zeros(ComplexF64, 2, 2)
+function get_pin_operators(rho_target; tol=1e-12)
+    d = size(rho_target, 1)
 
-    for A in As
-        S += A' * A
+    # diagonalize target density matrix
+    F = eigen(Hermitian(rho_target))
+    q = real.(F.values)
+    Phi = F.vectors
+
+    Ks = Matrix{ComplexF64}[]
+
+    for j in 1:d
+        if q[j] > tol
+            phi_j = Phi[:, j]
+
+            for i in 1:d
+                e_i = zeros(ComplexF64, d)
+                e_i[i] = 1.0
+
+                K = sqrt(q[j]) * phi_j * e_i'
+                push!(Ks, K)
+            end
+        end
     end
-
-    # Invert the normalization factor
-    S_inv_half = invsqrt_hermitian(S)
-
-    # Normalize the Kraus operators
-    Ks = [A * S_inv_half for A in As]
 
     return Ks
 end
-
 
 """
     get_depolarizing_operators(gamma, t; n_qubits=1)
