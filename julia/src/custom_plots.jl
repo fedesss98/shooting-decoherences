@@ -116,7 +116,7 @@ function plot_autorecovery(state, cfg, logs; choices=true, show=true, save=false
 end
 
 function plot_average_fidelity(avg_fidelities, avg_ref_fidelities, state, cfg; show=true, save=false, kwargs...)
-    ylims = get(kwargs, :ylims, [0.8, 1.01])
+    ylims = get(kwargs, :ylims, [0.0, 1.01])
     xlims = get(kwargs, :xlims, [0, cfg.n_timesteps])
     size = get(kwargs, :size, (1200, 400))
     infidelity = get(kwargs, :infidelity, false)
@@ -158,7 +158,10 @@ function plot_average_fidelity(avg_fidelities, avg_ref_fidelities, state, cfg; s
 
     if save
         output_folder = joinpath(cfg.experiment_dir, "visualization")
-        plot_title = infidelity ? "adaptive_recovery_infidelity_avg" : "adaptive_recovery_avg"
+        plot_title = get(kwargs, :plot_title,
+            infidelity ? "adaptive_recovery_infidelity_avg" : "adaptive_recovery_avg"
+        )
+        @debug "Saving plot" output_folder plot_title
         savefig(p, joinpath(output_folder, "$(plot_title).png"))
         savefig(p, joinpath(output_folder, "$(plot_title).pdf"))
     end
