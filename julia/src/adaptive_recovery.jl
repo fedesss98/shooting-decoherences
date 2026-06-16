@@ -44,9 +44,15 @@ function collapse_state(ρ_SA, Π)
   return ρ_post / Z
 end
 
-function collapse_map(input_state, output_state)
+function collapse_map(input_state, output_state; pin=true)
   d = size(input_state, 1)
   superop = zeros(ComplexF64, d^2, d^2)
+
+  if pin
+    kraus = get_pin_operators(output_state)
+    superop = kraus_to_superop(kraus)
+    return superop
+  end
 
   function stochastic_projection(states_in, states_out)
     return states_out * states_in'
