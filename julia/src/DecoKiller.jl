@@ -4,7 +4,7 @@ using ProgressMeter
 using JSON
 using Dates
 
-export run_experiment
+export run_experiment, iterate_recovery!
 
 # Core primitives and lower-level modules.
 include("PetzMaps.jl")
@@ -78,20 +78,29 @@ function _run_single_state!(cfg::RecoveryConfig, state::RecoveryState, logs::Rec
 end
 
 
-function _plot_and_save_results(cfg::RecoveryConfig, state::RecoveryState, logs::RecoveryLogs, avg_fidelities)
+function _plot_and_save_results(cfg::RecoveryConfig, state::RecoveryState, logs::RecoveryLogs, avg_fidelities=nothing)
     save_results!(cfg, state, logs, avg_fidelities)
-    plot_autorecovery(state, cfg, logs; show=false, save=true, xlims=[0, cfg.n_timesteps])
-    plot_average_fidelity(avg_fidelities[2], avg_fidelities[1], state, cfg; show=false, save=true)
+    if cfg.n_states == 1
+        plot_autorecovery(state, cfg, logs; show=false, save=true, cfg.plots_options...)
+    else
+        plot_average_fidelity(
+            avg_fidelities[2], avg_fidelities[1], state, cfg;
+            show=false, save=true, cfg.plots_options...)
+    end
     return nothing
 end
 
 
-function run_experiment(config_file="./configs/config.toml")
-    cfg, state, logs = load_configuration(config_file)
+function run_experiment(config_file="./configs/config.toml"; debug::Bool=false)
+    cfg, state, logs = load_configuration(config_file; debug=debug)
 
     ref_fidelities = zeros(Float64, cfg.n_timesteps)
     fidelities = zeros(Float64, cfg.n_timesteps)
 
+    if cfg.n_states == 1
+        start_idx, end_idx = _run_single_state!(cfg, state, logs, 1)
+        avg_fidelities = [nothing, nothing]
+    else
     p_states = Progress(cfg.n_states, desc="Adaptive Recovery ")
     for s in 1:cfg.n_states
         start_idx, end_idx = _run_single_state!(cfg, state, logs, s)
@@ -100,7 +109,7 @@ function run_experiment(config_file="./configs/config.toml")
         next!(p_states)
     end
     avg_fidelities = (ref_fidelities ./ cfg.n_states, fidelities ./ cfg.n_states)
-
+    end
     _plot_and_save_results(cfg, state, logs, avg_fidelities)
 
     return cfg, state, logs, avg_fidelities
