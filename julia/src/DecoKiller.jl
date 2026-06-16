@@ -30,14 +30,19 @@ function reset_initial_state!(state::RecoveryState, cfg::RecoveryConfig)
         state.ρ0 .= ρ0
         state.ρ_free .= ρ0
         state.ρ_rec .= ρ0
-    elseif cfg.recovery_type == "codespace"
+    elseif cfg.recovery_type == "codespace" || cfg.recovery_type == "codespace_xy"
         sigma = cfg.sigma
         p = rand(cfg.rng)
-        max_x = p * (1-p)  # Maximum allowed magnitude for |x|^2
+        max_x = p * (1 - p)  # Maximum allowed magnitude for |x|^2
         radius = sqrt(rand(cfg.rng) * max_x)
         x = radius * exp(2π * im * rand(cfg.rng))
-        ρ = codespace_dm(cfg.n_qubits, p, x)
-        ρ0 = ρ + sigma
+        ρ = if cfg.recovery_type == "codespace"
+            codespace_dm(cfg.n_qubits, p, x)
+        else
+            single_excitation_dm(cfg.n_qubits, p, x)
+        end
+        r = cfg.sigma_mixture
+        ρ0 = (1 - r) * ρ + r * sigma
         ρ0 = ρ0 / tr(ρ0)  # Normalize to ensure it's a valid density matrix
         state.ρ0 .= ρ0
         state.ρ_free .= ρ0

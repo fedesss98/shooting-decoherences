@@ -12,10 +12,10 @@ function rand_unitary_haar(N::Int, rng)
     else
         Z = randn(ComplexF64, N, N) / sqrt(2.0)
     end
-    
+
     # 2. Perform QR decomposition
     Q, R = qr(Z)
-    
+
     # 3. Correct the phases of the diagonal of R to ensure strict Haar distribution
     # (The standard QR is unique only up to phases; this fixes the gauge)
     d = diag(R)
@@ -33,21 +33,21 @@ function rand_state_with_spectrum(spectrum::Vector{<:Number}; rng=nothing)
     # Ensure the spectrum is normalized
     spectrum = abs.(spectrum) / sum(abs.(spectrum))
     N = length(spectrum)
-    
+
     # Generate the random basis change
     U = rand_unitary_haar(N, rng)
-    
+
     # Construct the matrix: rho = U * Λ * U†
     # We use Diagonal for efficiency
     Lambda = Diagonal(spectrum)
-    
+
     state = U * Lambda * U'
     for i in eachindex(state)
-        re = abs(real(state[i])) > 1e-8 ? real(state[i]) : 0.0 
-        img = abs(imag(state[i])) > 1e-8 ? imag(state[i]) : 0.0 
-        state[i] = re + im*img
+        re = abs(real(state[i])) > 1e-8 ? real(state[i]) : 0.0
+        img = abs(imag(state[i])) > 1e-8 ? imag(state[i]) : 0.0
+        state[i] = re + im * img
     end
-    return state 
+    return state
 end
 
 
@@ -82,7 +82,31 @@ function thermal_state(n, beta)
         end
     end
     return exp(beta * q) / tr(exp(beta * q))
+end
+function site_operator(op, site, n)
+    id = Matrix{ComplexF64}(I, 2, 2)
+    ops = [k == site ? op : id for k in 1:n]
+    return foldl(kron, ops)
+end
 
+function thermal_state_hopping(n, beta; g=1 / n)
+    σp = ComplexF64[0 1; 0 0]
+    σm = ComplexF64[0 0; 1 0]
+
+    dim = 2^n
+    H = zeros(ComplexF64, dim, dim)
+
+    σp_ops = [site_operator(σp, i, n) for i in 1:n]
+    σm_ops = [site_operator(σm, i, n) for i in 1:n]
+
+    for i in 1:n-1
+        for j in i+1:n
+            H += g * (σp_ops[i] * σm_ops[j] + σp_ops[j] * σm_ops[i])
+        end
+    end
+
+    ρ = exp(-beta * H)
+    return ρ / tr(ρ)
 end
 
 """
@@ -94,7 +118,7 @@ function input_state(n, a, b)
     # Ground and excited states of one qubit
     g0 = [0.0 + 0.0im; 1.0]
     e1 = [1.0 + 0.0im; 0.0]
-    
+
     ground = foldl(kron, [g0 for _ in 1:n])
     excited = foldl(kron, [e1 for _ in 1:n])
     state = normalize(a * ground + b * excited)
@@ -118,6 +142,20 @@ function codespace_state(n_qubits, a, b, c, d)
     return psi * psi'
 end
 
+"""
+    single_excitation_state(n_qubits, a, b)
+
+Create a state in the kernel of the all-to-all hopping Hamiltonian
+"""
+function single_excitation_state(n_qubits, a, b)
+    n_qubits != 2 && throw(ArgumentError("The parameter `codespace_xy` is implemented only for `n_qubtis=2`."))
+    psi = zeros(ComplexF64, 2^n_qubits)
+    psi[2] = a
+    psi[3] = b
+    psi = normalize(psi)
+    return psi * psi'
+end
+
 function codespace_dm(n_qubits, p, x)
     dim = 2^n_qubits
 
@@ -127,6 +165,24 @@ function codespace_dm(n_qubits, p, x)
     rho[end, end] = 1 - p
     rho[1, dim] = x
     rho[dim, 1] = conj(x)
+
+    return rho
+end
+
+function single_excitation_dm(n_qubits, p, x)
+    n_qubits != 2 && throw(ArgumentError("The parameter `codespace_xy` is implemented only for `n_qubtis=2`."))
+
+    0 <= p <= 1 || throw(ArgumentError("p must be in [0, 1]"))
+
+    abs2(x) <= p * (1 - p) + 1e-12 ||
+        throw(ArgumentError("Need |x|^2 ≤ p(1-p) for a valid density matrix"))
+
+    rho = zeros(ComplexF64, 4, 4)
+
+    rho[2, 2] = p
+    rho[3, 3] = 1 - p
+    rho[2, 3] = x
+    rho[3, 2] = conj(x)
 
     return rho
 end
