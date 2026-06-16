@@ -13,11 +13,11 @@ mutable struct NoiseObj
     supermap::Matrix{ComplexF64}
 end
 function NoiseObj(
-    noise::String, 
-    p::Float64, 
-    sigma::Matrix{T}, 
-    gamma::Float64, 
-    t::Float64; 
+    noise::String,
+    p::Float64,
+    sigma::Matrix{T},
+    gamma::Float64,
+    t::Float64;
     rng::Union{Nothing,AbstractRNG}=nothing,
     correlated::Bool=false
 ) where T
@@ -134,7 +134,7 @@ end
 
 # Define the type for logging the supermaps at each step (using a NamedTuple for clarity)
 const SupermapsLogged = @NamedTuple{
-    Nx::Matrix{ComplexF64}, N1::Matrix{ComplexF64}, N2::Matrix{ComplexF64}, 
+    Nx::Matrix{ComplexF64}, N1::Matrix{ComplexF64}, N2::Matrix{ComplexF64},
     P::Matrix{ComplexF64}, Cx::Matrix{ComplexF64}, Xi::Matrix{ComplexF64}}
 # Logs for tracking evolution of metrics
 struct RecoveryLogs
@@ -155,9 +155,9 @@ to run the recovery algorithm: configuration, initial state, and logs.
 """
 function load_configuration(config_file="./configs/config.toml"; debug::Bool=false)
     cfg = TOML.parsefile(config_file)
-    recovery_cfg  = parse_recovery_config(cfg)
-    noise_options  = parse_noise_options(cfg, recovery_cfg.sigma, recovery_cfg.dt, recovery_cfg.rng)
-    @debug "Parsed Noise Options: " noise_options
+    recovery_cfg = parse_recovery_config(cfg; debug=debug)
+    noise_options = recovery_cfg.noise_options
+    @debug "Parsed Noise Options: " [no.name for no in noise_options]
     recovery_state = initialize_recovery_state(recovery_cfg, noise_options)
     return recovery_cfg, recovery_state, RecoveryLogs()
 end
@@ -210,21 +210,21 @@ function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
 
     rng = make_rng(seed)
     experiment_dir = setup_experiment_dir(name, cfg)
-    setup_logger(joinpath(experiment_dir, "debug.log"))
+    setup_logger(joinpath(experiment_dir, "debug.log"); console_level=debug ? Logging.Debug : Logging.Info)
 
     sigma = make_reference_state(starting_state, n_qubits, beta, rng)
     noise_options = parse_noise_options(cfg, sigma, dt, rng)
     if get(cfg, "real_noise", nothing) === nothing
         println("No real noise specified in config, sampling from noise options...\n")
-        real_noise = sample_real_noise(rng, noise_options)
+        real_noise_idx = sample_real_noise_index(rng, noise_options)
     else
         println("Using specified real noise from config: $(cfg["real_noise"])\n")
         real_noise_idx = findfirst(n -> n.name == cfg["real_noise"], noise_options)
         if real_noise_idx === nothing
             throw(ArgumentError("Specified real noise '$(cfg["real_noise"])' not found in noise options"))
         end
-        real_noise = noise_options[real_noise_idx]
     end
+    real_noise = deepcopy(noise_options[real_noise_idx])
 
     return RecoveryConfig(
         name, experiment_dir, sigma, sigma_mixture, recovery_type, real_noise,
@@ -295,11 +295,11 @@ function make_reference_state(params::Dict, n_qubits::Int, beta::Float64, rng)
 end
 
 const DEFAULT_NOISE_OPTIONS = [
-    (0.60, "bitflip",   1.0),
+    (0.60, "bitflip", 1.0),
     (0.40, "dephasing", 1.0),
 ]
 
-function parse_noise_options(cfg::Dict, sigma, dt::Float64, rng::Union{AbstractRNG, Nothing} = nothing)::Vector{NoiseObj}
+function parse_noise_options(cfg::Dict, sigma, dt::Float64, rng::Union{AbstractRNG,Nothing}=nothing)::Vector{NoiseObj}
     raw = get(cfg, "noise_options", DEFAULT_NOISE_OPTIONS)
     correlated_noise = get(cfg, "correlated_noise", false)
     return [NoiseObj(name, prob, sigma, gamma, dt; rng=rng, correlated=correlated_noise)
@@ -307,8 +307,12 @@ function parse_noise_options(cfg::Dict, sigma, dt::Float64, rng::Union{AbstractR
 end
 
 function sample_real_noise(rng, noise_options::Vector{NoiseObj})::NoiseObj
+    return deepcopy(noise_options[sample_real_noise_index(rng, noise_options)])
+end
+
+function sample_real_noise_index(rng, noise_options::Vector{NoiseObj})::Int
     weights = Weights([n.probability for n in noise_options])
-    return deepcopy(sample(rng, noise_options, weights))
+    return sample(rng, 1:length(noise_options), weights)
 end
 
 
@@ -357,8 +361,8 @@ function make_initial_state(cfg::RecoveryConfig)
 end
 
 function make_initial_choice(rng, noise_options::Vector{NoiseObj})::ChoiceSystem
-    n       = length(noise_options)
-    counts  = zeros(Int, n)
+    n = length(noise_options)
+    counts = zeros(Int, n)
     current = sample(rng, 1:n)
     counts[current] = 1
 
