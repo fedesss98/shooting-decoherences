@@ -8,8 +8,8 @@ using LinearAlgebra
 Verify that a matrix is unitary (U† U = I).
 """
 function verify_unitary(U::Matrix{ComplexF64}; atol=1e-10)
-  n = size(U, 1)
-  return isapprox(U' * U, I(n), atol=atol)
+    n = size(U, 1)
+    return isapprox(U' * U, I(n), atol=atol)
 end
 
 """
@@ -18,15 +18,15 @@ end
 Set small values of a complex number to zero.
 """
 function chop_parts(z::ComplexF64, tol::Float64)
-  # Check real part
-  r = real(z)
-  new_r = abs(r) > tol ? r : 0.0
+    # Check real part
+    r = real(z)
+    new_r = abs(r) > tol ? r : 0.0
 
-  # Check imaginary part
-  i = imag(z)
-  new_i = abs(i) > tol ? i : 0.0
+    # Check imaginary part
+    i = imag(z)
+    new_i = abs(i) > tol ? i : 0.0
 
-  return complex(new_r, new_i)
+    return complex(new_r, new_i)
 end
 
 """
@@ -35,7 +35,7 @@ end
 Set small elements to zero.
 """
 function chop!(input, tol::Float64=1e-9)
-  map!(z -> chop_parts(z, tol), input, input)
+    map!(z -> chop_parts(z, tol), input, input)
 end
 
 
@@ -45,37 +45,37 @@ end
 Calculates the partial trace of a multipartite density matrix ρ.
 """
 function partial_trace(ρ, dims, system_to_trace)
-  # Validate dimensions
-  if prod(dims) != size(ρ, 1) && prob(dims) != size(ρ, 2)
-    throw(DimensionMismatch("Dims do not match matrix size"))
-  end
+    # Validate dimensions
+    if prod(dims) != size(ρ, 1) && prob(dims) != size(ρ, 2)
+        throw(DimensionMismatch("Dims do not match matrix size"))
+    end
 
-  # Reshape into a tensor
-  tensor = reshape(ρ, (dims..., dims...))
+    # Reshape into a tensor
+    tensor = reshape(ρ, (dims..., dims...))
 
-  # Identify indices to keep
-  N = length(dims)
-  trace_idx_row = system_to_trace
-  trace_idx_col = system_to_trace + N
-  keep_indices = setdiff(1:2N, [trace_idx_row, trace_idx_col])
+    # Identify indices to keep
+    N = length(dims)
+    trace_idx_row = system_to_trace
+    trace_idx_col = system_to_trace + N
+    keep_indices = setdiff(1:2N, [trace_idx_row, trace_idx_col])
 
-  # Trace
-  perm = [keep_indices; trace_idx_row; trace_idx_col]
-  tensor_perm = permutedims(tensor, perm)
-  # Reshape to separate the part we keep and the part we trace
-  # (Dim_Keep, Dim_Keep, Dim_Trace, Dim_Trace)
-  dim_trace = dims[system_to_trace]
-  dim_keep_total = div(length(ρ), dim_trace^2)
+    # Trace
+    perm = [keep_indices; trace_idx_row; trace_idx_col]
+    tensor_perm = permutedims(tensor, perm)
+    # Reshape to separate the part we keep and the part we trace
+    # (Dim_Keep, Dim_Keep, Dim_Trace, Dim_Trace)
+    dim_trace = dims[system_to_trace]
+    dim_keep_total = div(length(ρ), dim_trace^2)
 
-  matrix_stage = reshape(tensor_perm, (dim_keep_total, dim_trace, dim_trace))
+    matrix_stage = reshape(tensor_perm, (dim_keep_total, dim_trace, dim_trace))
 
-  # Now trace: sum over the diagonal of the last two dimensions
-  # effectively: result[i] = sum(matrix_stage[i, k, k] for k)
-  rho_reduced = map(i -> tr(matrix_stage[i, :, :]), 1:dim_keep_total)
+    # Now trace: sum over the diagonal of the last two dimensions
+    # effectively: result[i] = sum(matrix_stage[i, k, k] for k)
+    rho_reduced = map(i -> tr(matrix_stage[i, :, :]), 1:dim_keep_total)
 
-  # Reshape back to square matrix
-  final_dim = Int(sqrt(dim_keep_total))
-  return reshape(rho_reduced, (final_dim, final_dim))
+    # Reshape back to square matrix
+    final_dim = Int(sqrt(dim_keep_total))
+    return reshape(rho_reduced, (final_dim, final_dim))
 end
 
 
@@ -93,28 +93,28 @@ Compute the partial trace over the ancilla (second subsystem).
 - Reduced density matrix of the system (dim_system × dim_system)
 """
 function partial_trace_ancilla(rho::Matrix{ComplexF64}, dim_system::Int, dim_ancilla::Int)
-  total_dim = dim_system * dim_ancilla
+    total_dim = dim_system * dim_ancilla
 
-  if size(rho) != (total_dim, total_dim)
-    error("Density matrix size doesn't match system dimensions!")
-  end
-
-  rho_reduced = zeros(ComplexF64, dim_system, dim_system)
-
-  # Sum over ancilla basis states
-  for k in 0:(dim_ancilla-1)
-    for i in 0:(dim_system-1)
-      for j in 0:(dim_system-1)
-        # Map indices: |i⟩_S ⊗ |k⟩_A has index i*dim_ancilla + k + 1 (Julia 1-indexed)
-        row_idx = i * dim_ancilla + k + 1
-        col_idx = j * dim_ancilla + k + 1
-
-        rho_reduced[i+1, j+1] += rho[row_idx, col_idx]
-      end
+    if size(rho) != (total_dim, total_dim)
+        error("Density matrix size doesn't match system dimensions!")
     end
-  end
 
-  return rho_reduced
+    rho_reduced = zeros(ComplexF64, dim_system, dim_system)
+
+    # Sum over ancilla basis states
+    for k in 0:(dim_ancilla-1)
+        for i in 0:(dim_system-1)
+            for j in 0:(dim_system-1)
+                # Map indices: |i⟩_S ⊗ |k⟩_A has index i*dim_ancilla + k + 1 (Julia 1-indexed)
+                row_idx = i * dim_ancilla + k + 1
+                col_idx = j * dim_ancilla + k + 1
+
+                rho_reduced[i+1, j+1] += rho[row_idx, col_idx]
+            end
+        end
+    end
+
+    return rho_reduced
 end
 
 """
@@ -123,32 +123,32 @@ Compute ρ^p using pseudoinverse for singular matrices.
 Zero eigenvalues (< tol) are kept as zero instead of inverted.
 """
 function matrix_power_pseudo(ρ, p; tol=1e-10)
-  eigen_decomp = eigen(Hermitian(ρ))
-  λ = eigen_decomp.values
-  V = eigen_decomp.vectors
+    eigen_decomp = eigen(Hermitian(ρ))
+    λ = eigen_decomp.values
+    V = eigen_decomp.vectors
 
-  # Apply power only to non-zero eigenvalues
-  λ_powered = similar(λ, ComplexF64)
-  for i in eachindex(λ)
-    if abs(λ[i]) > tol
-      λ_powered[i] = λ[i]^p
-    else
-      λ_powered[i] = 0.0
+    # Apply power only to non-zero eigenvalues
+    λ_powered = similar(λ, ComplexF64)
+    for i in eachindex(λ)
+        if abs(λ[i]) > tol
+            λ_powered[i] = λ[i]^p
+        else
+            λ_powered[i] = 0.0
+        end
     end
-  end
 
-  return V * Diagonal(λ_powered) * V'
+    return V * Diagonal(λ_powered) * V'
 end
 
 function read_config(config_path)
-  if !isfile(config_path)
-    error("Config file not found at: $config_path")
-  end
+    if !isfile(config_path)
+        error("Config file not found at: $config_path")
+    end
 
-  config = TOML.parsefile(config_path)
-  println("""Loaded configuration for experiment $(config["experiment"])""")
+    config = TOML.parsefile(config_path)
+    println("""Loaded configuration for experiment $(config["experiment"])""")
 
-  return config
+    return config
 end
 
 
@@ -193,7 +193,7 @@ Removes imaginary noise from diagonal and resets Trace to 1.
 function enforce_physical!(rho::Matrix{ComplexF64})
     # 1. Symmetrize to remove imaginary drift (force Hermiticity)
     rho .= (rho .+ rho') ./ 2
-    
+
     # 2. Normalize Trace (fix Petz contraction)
     tr_val = real(tr(rho))
     if tr_val > 1e-12
@@ -214,45 +214,45 @@ end
 using LinearAlgebra
 
 function _swap_unitary(ds::Int, da::Int)
-  U = zeros(ComplexF64, ds * da, ds * da)
-  for s in 1:ds
-    for a in 1:da
-      row = (a - 1) * ds + s
-      col = (s - 1) * da + a
-      U[row, col] = 1.0 + 0.0im
+    U = zeros(ComplexF64, ds * da, ds * da)
+    for s in 1:ds
+        for a in 1:da
+            row = (a - 1) * ds + s
+            col = (s - 1) * da + a
+            U[row, col] = 1.0 + 0.0im
+        end
     end
-  end
-  return U
+    return U
 end
 
 function _n_qubit_exchange_unitary(n_qubits::Int, g::Float64=0.1, t::Float64=1.0)
-  # Qubit raising and lowering operators
-  sp = [0.0 1.0; 0.0 0.0]
-  sm = [0.0 0.0; 1.0 0.0]
+    # Qubit raising and lowering operators
+    sp = [0.0 1.0; 0.0 0.0]
+    sm = [0.0 0.0; 1.0 0.0]
 
-  # Total dimension, considering 1 qubit ancilla
-  n_total = n_qubits + 1
-  d = 2^(n_total)
-  H_int = zeros(ComplexF64, d, d)
+    # Total dimension, considering 1 qubit ancilla
+    n_total = n_qubits + 1
+    d = 2^(n_total)
+    H_int = zeros(ComplexF64, d, d)
 
-  # The ancilla is the 'last system' in the kronecker product
-  ancilla_idx = n_total
-  sp_anc = embed_operator(sp, ancilla_idx, n_total)
-  sm_anc = embed_operator(sm, ancilla_idx, n_total)
-    
-  # Sum over all k system qubits
-  for k in 1:n_qubits
-      sp_k = embed_operator(sp, k, n_total)
-      sm_k = embed_operator(sm, k, n_total)
-      
-      exchange_term = (sp_anc * sm_k) + (sm_anc * sp_k)
-      
-      H_int += (g / n_qubits) * exchange_term
-  end
+    # The ancilla is the 'last system' in the kronecker product
+    ancilla_idx = n_total
+    sp_anc = embed_operator(sp, ancilla_idx, n_total)
+    sm_anc = embed_operator(sm, ancilla_idx, n_total)
 
-  # Return the time evolution unitary U(t)
-  U = exp(-1im * H_int * t)
-  return U
+    # Sum over all k system qubits
+    for k in 1:n_qubits
+        sp_k = embed_operator(sp, k, n_total)
+        sm_k = embed_operator(sm, k, n_total)
+
+        exchange_term = (sp_anc * sm_k) + (sm_anc * sp_k)
+
+        H_int += (g / n_qubits) * exchange_term
+    end
+
+    # Return the time evolution unitary U(t)
+    U = exp(-1im * H_int * t)
+    return U
 end
 
 function kraus_from_unitary(
@@ -262,7 +262,7 @@ function kraus_from_unitary(
     ancilla_state::AbstractMatrix,
     atol::Real=1e-12,
 ) where T
-    size(U) == (d_s*d_a, d_s*d_a) || throw(ArgumentError("wrong U size"))
+    size(U) == (d_s * d_a, d_s * d_a) || throw(ArgumentError("wrong U size"))
     size(ancilla_state) == (d_a, d_a) || throw(ArgumentError("wrong ancilla size"))
 
     eig = eigen(Hermitian(Matrix{T}(ancilla_state)))
@@ -323,10 +323,10 @@ Builds the superoperator matrix which implements the n+1 evolution step:
 collision + noise
 """
 function build_superoperators(model)
-  M_petz = kraus_to_superop(model.kraus_rec)
-  M_noise = kraus_to_superop(model.kraus_fwd)
+    M_petz = kraus_to_superop(model.kraus_rec)
+    M_noise = kraus_to_superop(model.kraus_fwd)
 
-  return M_petz, M_noise
+    return M_petz, M_noise
 end
 
 
@@ -336,26 +336,26 @@ Route to the correct Kraus operators given the name of the noise.
 The output is a List of Kraus operators.
 """
 function get_kraus_operators(noise, gamma, t; rng=nothing, n_qubits=1)
-  if noise == "amplitude_damping"
-    return get_amplitudedamping_operators(gamma, t; n_qubits=n_qubits)
-  elseif noise == "phase_damping"
-    return get_phasedamping_operators(gamma, t; n_qubits=n_qubits)
-  elseif noise == "bitflip"
-    return get_bitflip_operators(gamma, t; n_qubits=n_qubits)
-  elseif noise == "depolarizing"
-    return get_depolarizing_operators(gamma, t; n_qubits=n_qubits)
-  elseif noise == "random"
-    return get_random_operators(rng; n_qubits=n_qubits)
-  else
-    error("Unknown noise model: $noise")
-  end
+    if noise == "amplitude_damping"
+        return get_amplitudedamping_operators(gamma, t; n_qubits=n_qubits)
+    elseif noise == "phase_damping"
+        return get_phasedamping_operators(gamma, t; n_qubits=n_qubits)
+    elseif noise == "bitflip"
+        return get_bitflip_operators(gamma, t; n_qubits=n_qubits)
+    elseif noise == "depolarizing"
+        return get_depolarizing_operators(gamma, t; n_qubits=n_qubits)
+    elseif noise == "random" || noise == "general"
+        return get_random_operators(rng; n_qubits=n_qubits)
+    else
+        error("Unknown noise model: $noise")
+    end
 
 end
 
 function unvec(state)
-  dims = Int(sqrt(size(state, 1)))
+    dims = Int(sqrt(size(state, 1)))
 
-  return reshape(state, dims, dims)
+    return reshape(state, dims, dims)
 end
 
 """
@@ -373,7 +373,7 @@ end
 
 function embed_operator(op::Matrix, target_index::Int, n::Int)
     I2 = [1.0 0.0; 0.0 1.0] # 2x2 Identity
-    
+
     # Start the Kronecker product chain
     result = (target_index == 1) ? op : I2
     for i in 2:n
@@ -421,7 +421,7 @@ function stochastic_transition(p, q; A=nothing, tol=1e-12, checktol=1e-12)
     R = q * p' + A
 
     # Clean tiny numerical noise
-    R[abs.(R) .< tol] .= 0.0
+    R[abs.(R).<tol] .= 0.0
 
     if any(R .< -tol)
         error("Invalid transport plan: some entries of R are negative.")
@@ -451,7 +451,7 @@ function stochastic_transition(p, q; A=nothing, tol=1e-12, checktol=1e-12)
     end
 
     # Numerical cleanup
-    T[abs.(T) .< tol] .= 0.0
+    T[abs.(T).<tol] .= 0.0
 
     # Defensive column normalization
     for i in 1:n
@@ -503,4 +503,4 @@ function clean_eigenvalues(eigvals, tol=1e-10)
         end
     end
     return cleaned
-  end
+end
