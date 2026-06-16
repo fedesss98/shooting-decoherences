@@ -135,9 +135,9 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   
   # Apply noise only to the system
   n_subsystems = config.correlated_noise ? 1 : config.n_qubits
-  rho_to_rec_ = apply_channel(real_kraus, rho_to_rec_, n_subsystems; extra_dims=da)
-  rho1_ = apply_channel(option_kraus[1], rho1_, n_subsystems; extra_dims=da)
-  rho2_ = apply_channel(option_kraus[2], rho2_, n_subsystems; extra_dims=da)
+  rho_to_rec_ = apply_extended_channel(rho_to_rec_, real_kraus; dim_to_extend=da)
+  rho1_ = apply_extended_channel(rho1_, option_kraus[1]; dim_to_extend=da)
+  rho2_ = apply_extended_channel(rho2_, option_kraus[2]; dim_to_extend=da)
 
   # Create the supermap corresponding to the collision followed by the noise
   Xi = kraus_to_superop(compose_kraus(real_kraus, model.kraus_fwd))
