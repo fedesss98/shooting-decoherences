@@ -1,3 +1,4 @@
+const MAX_KRAUS_OPERATORS = 512
 
 """
     CollisionModel
@@ -22,7 +23,7 @@ General constructor. Given arbitrary Kraus operators and a reference state:
 1. Computes the Petz Recovery Kraus operators.
 2. Constructs the Stinespring Collision Unitary U.
 """
-function CollisionModel(kraus_fwd::Vector{Matrix{T1}}, sigma::Matrix{T2}; n::Int=1) where {T1<:Number, T2<:Number}
+function CollisionModel(kraus_fwd::Vector{Matrix{T1}}, sigma::Matrix{T2}; n::Int=1) where {T1<:Number,T2<:Number}
     # Determine a common type
     T = promote_type(T1, T2)
     # and convert inputs to this common type
@@ -34,14 +35,14 @@ function CollisionModel(kraus_fwd::Vector{Matrix{T1}}, sigma::Matrix{T2}; n::Int
     end
     d_sys = size(sigma, 1)
     d_anc = length(kraus_fwd) # Ancilla dimension = number of Kraus ops
-    
+
     # 1. Compute Forward Action on Sigma: N(σ) = ∑ K σ K'
     N_sigma = sum(K * sigma * K' for K in kraus_fwd)
 
     # 2. Compute Petz Recovery Kraus Ops: R_i = σ^(1/2) K_i' N(σ)^(-1/2)
     # Note: Using pinv for stability, assuming Hermitian matrices
     σ_sqrt = sqrt(Hermitian(sigma))
-    σ_out_inv_sqrt = inv(sqrt(Hermitian(N_sigma + 1e-10*I)))
+    σ_out_inv_sqrt = inv(sqrt(Hermitian(N_sigma + 1e-10 * I)))
     kraus_rec = [σ_sqrt * K' * σ_out_inv_sqrt for K in kraus_fwd]
 
     # 3. Construct Stinespring Unitary U
@@ -62,19 +63,19 @@ The Petz recovery is constructed by numerical Choi-Jamiolkowski:
 - Compute dΦ/dγ ≈ (Φ(γ+dγ) - Φ(γ))/dγ
 - Extract Kraus operators via eigendecomposition of Choi matrix
 """
-function CollisionModel(noise_channel::Function, gamma::Real, sigma::Matrix{T}; 
-                            nsteps::Int=100) where T<:Number
+function CollisionModel(noise_channel::Function, gamma::Real, sigma::Matrix{T};
+    nsteps::Int=100) where T<:Number
     d = size(sigma, 1)
-    
+
     # Maximize basis for Choi matrix
-    max_ent = sum(kron(Matrix{T}(I, d, d)[:, i:i], Matrix{T}(I, d, d)[:, i:i]) 
+    max_ent = sum(kron(Matrix{T}(I, d, d)[:, i:i], Matrix{T}(I, d, d)[:, i:i])
                   for i in 1:d) / sqrt(d)
     rho_max = max_ent * max_ent'
-    
+
     # Apply channel to maximally entangled state
     # Φ ⊗ I acting on |Ψ⟩⟨Ψ| gives Choi matrix
     function choi_matrix(γ)
-        choi = zeros(T, d*d, d*d)
+        choi = zeros(T, d * d, d * d)
         for i in 1:d, j in 1:d
             input = zeros(T, d, d)
             input[i, j] = one(T)
@@ -85,12 +86,12 @@ function CollisionModel(noise_channel::Function, gamma::Real, sigma::Matrix{T};
         end
         return choi
     end
-    
+
     # Derivative at gamma
     dγ = gamma / nsteps
     J = (choi_matrix(gamma + dγ) - choi_matrix(gamma)) / dγ
     J = (J + J') / 2  # Symmetrize
-    
+
     # Extract Kraus from Choi eigendecomposition
     vals, vecs = eigen(Hermitian(J))
     kraus_fwd = Matrix{T}[]
@@ -100,9 +101,9 @@ function CollisionModel(noise_channel::Function, gamma::Real, sigma::Matrix{T};
             push!(kraus_fwd, K)
         end
     end
-    
+
     isempty(kraus_fwd) && push!(kraus_fwd, zeros(T, d, d))
-    
+
     CollisionModel(kraus_fwd, sigma)
 end
 
@@ -114,16 +115,16 @@ Extracts Kraus operators via Choi matrix eigendecomposition.
 """
 function CollisionModel(M::Matrix{T}, sigma::Matrix{T}) where T<:Number
     d = size(sigma, 1)
-    
+
     # Choi matrix from superoperator: reshape and transpose
     # J = sum_ij |i⟩⟨j| ⊗ M(|i⟩⟨j|)
     choi = reshape(M, d, d, d, d)
     choi = permutedims(choi, [1, 3, 2, 4])
-    choi = reshape(choi, d*d, d*d)
-    
+    choi = reshape(choi, d * d, d * d)
+
     # Symmetrize
     choi = (choi + choi') / 2
-    
+
     # Extract Kraus operators
     vals, vecs = eigen(Hermitian(choi))
     kraus_fwd = Matrix{T}[]
@@ -133,10 +134,10 @@ function CollisionModel(M::Matrix{T}, sigma::Matrix{T}) where T<:Number
             push!(kraus_fwd, K)
         end
     end
-    
+
     isempty(kraus_fwd) && push!(kraus_fwd, zeros(T, d, d))
-    
-    if length(kraus_fwd) > 64
+
+    if length(kraus_fwd) >= MAX_KRAUS_OPERATORS
         error("Too many Kraus operators extracted: $(length(kraus_fwd)). Consider increasing the threshold or checking the input superoperator.")
     end
 
@@ -226,7 +227,7 @@ function CollisionModel(
     d_anc::Int;
     ancilla_state::Union{Nothing,AbstractMatrix}=nothing,
     compute_recovery::Bool=true,
-) where {T1<:Number, T2<:Number}
+) where {T1<:Number,T2<:Number}
 
     T = promote_type(T1, T2)
 
@@ -258,13 +259,13 @@ end
 Expand single-qubit Kraus operators to N-qubit system via tensor products.
 Modifies the input vector in place, replacing it with all m^N tensor product combinations.
 """
-function expand_kraus_operators!(kraus_single::Vector{Matrix{T}}, N::Int) where T    
+function expand_kraus_operators!(kraus_single::Vector{Matrix{T}}, N::Int) where T
     d_single = size(kraus_single[1], 1)
     @assert d_single == 2 "Single-qubit Kraus operators must be 2×2"
-    
+
     m = length(kraus_single)
     kraus_expanded = Matrix{T}[]
-    
+
     # Generate all tensor product combinations
     for idx in Iterators.product([1:m for _ in 1:N]...)
         K = kraus_single[idx[1]]
@@ -273,10 +274,10 @@ function expand_kraus_operators!(kraus_single::Vector{Matrix{T}}, N::Int) where 
         end
         push!(kraus_expanded, K)
     end
-    
+
     # Modify in place
     empty!(kraus_single)
     append!(kraus_single, kraus_expanded)
-    
+
     return kraus_single
 end
