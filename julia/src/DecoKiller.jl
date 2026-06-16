@@ -2,6 +2,7 @@ module DecoKiller
 
 using ProgressMeter
 using JSON
+using JLD2
 using Dates
 
 export run_experiment, iterate_recovery!
@@ -101,14 +102,14 @@ function run_experiment(config_file="./configs/config.toml"; debug::Bool=false)
         start_idx, end_idx = _run_single_state!(cfg, state, logs, 1)
         avg_fidelities = [nothing, nothing]
     else
-    p_states = Progress(cfg.n_states, desc="Adaptive Recovery ")
-    for s in 1:cfg.n_states
-        start_idx, end_idx = _run_single_state!(cfg, state, logs, s)
-        ref_fidelities .+= logs.ref_fidelities[start_idx:end_idx]
-        fidelities .+= logs.fidelities[start_idx:end_idx]
-        next!(p_states)
-    end
-    avg_fidelities = (ref_fidelities ./ cfg.n_states, fidelities ./ cfg.n_states)
+        p_states = Progress(cfg.n_states, desc="Adaptive Recovery ")
+        for s in 1:cfg.n_states
+            start_idx, end_idx = _run_single_state!(cfg, state, logs, s)
+            ref_fidelities .+= logs.ref_fidelities[start_idx:end_idx]
+            fidelities .+= logs.fidelities[start_idx:end_idx]
+            next!(p_states)
+        end
+        avg_fidelities = (ref_fidelities ./ cfg.n_states, fidelities ./ cfg.n_states)
     end
     _plot_and_save_results(cfg, state, logs, avg_fidelities)
 
@@ -121,6 +122,8 @@ function _serialize_maps(logs::RecoveryLogs)
             "Nx" => vec(real(m.Nx)),
             "N1" => vec(real(m.N1)),
             "N2" => vec(real(m.N2)),
+            "Cx" => vec(real(m.Cx)),
+            "Xi" => vec(real(m.Xi)),
             "P" => vec(real(m.P)),
             "dim" => size(m.Nx)
         ) for m in logs.maps
@@ -128,7 +131,7 @@ function _serialize_maps(logs::RecoveryLogs)
 end
 
 function save_results!(cfg::RecoveryConfig, state::RecoveryState, logs::RecoveryLogs, avg_fidelities)
-    out_file = joinpath(cfg.experiment_dir, "data", "results.json")
+    meta_file = joinpath(cfg.experiment_dir, "data", "meta.json")
     payload = Dict(
         "timestamp" => string(now()),
         "experiment" => cfg.name,
@@ -137,23 +140,41 @@ function save_results!(cfg::RecoveryConfig, state::RecoveryState, logs::Recovery
         "n_states" => cfg.n_states,
         "seed" => cfg.seed,
         "real_noise" => cfg.real_noise.name,
+        "real_noise_idx" => cfg.real_noise_idx,
         "noise_options" => [n.name for n in state.noise_options],
+    )
+
+    open(meta_file, "w") do io
+        JSON.print(io, payload, 2)
+    end
+
+    matrices_file = joinpath(cfg.experiment_dir, "data", "superoperators.jld2")
+    payload = Dict(
+        "real_noise_kraus" => cfg.real_noise.extended_kraus,
+        "real_noise_idx" => cfg.real_noise_idx,
+        "noise_options_kraus" => [n.extended_kraus for n in state.noise_options],
         "ancilla_state" => cfg.ancilla_state_name,
         "collision_unitary" => cfg.collision_unitary_name,
+        "maps" => _serialize_maps(logs)
+    )
+    JLD2.save(matrices_file, payload)
+
+    results_file = joinpath(cfg.experiment_dir, "data", "results.json")
+    payload = Dict(
         "fidelities" => logs.fidelities,
         "ref_fidelities" => logs.ref_fidelities,
+        "avg_ref_fidelities" => avg_fidelities[1],
+        "avg_fidelities" => avg_fidelities[2],
         "choice_history" => logs.choice_history,
         "choice_c1" => state.choice.c1,
         "choice_c2" => state.choice.c2,
-        "avg_ref_fidelities" => avg_fidelities[1],
-        "avg_fidelities" => avg_fidelities[2],
-        "maps" => _serialize_maps(logs)
     )
 
-    open(out_file, "w") do io
+    open(results_file, "w") do io
         JSON.print(io, payload, 2)
     end
-    return out_file
+
+    return results_file
 end
 
 
