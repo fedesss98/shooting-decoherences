@@ -1,0 +1,70 @@
+# Configurations for the adaptive recovery protocol
+# PARAMETERS
+# name: Name of the experiment's folder where output is saved (default: "test")
+# n_qubits: Number of qubits in the system (default: 1)
+# dt: Time step for the evolution (default: 0.1)
+# n_timesteps: Number of time steps to evolve (default: 10)
+# n_states: Number of different initial states to test (default: 5)
+#
+# reference_state: Type of reference state (default: "thermal"):
+#   - "thermal": Use a thermal state at inverse temperature beta
+#   - "random": Generate a random Density Matrix with a random spectrum
+#   - "codespace": Use a state in the codespace a|00...0> + b|11...1>
+# beta: Inverse temperature for the reference state (default: 2.0)
+#
+# recovery_type: Type of recovery experiment (default: "auto"):
+#   - "random": Use random initial states for each run
+#   - "codespace": Use random states in the codespace a|00...0> + b|11...1> mixed with sigma
+#   - "auto": Use the reference state itself as initial state
+#   - "inputstate": Use a specific input state defined by the user (default: "thermal")
+#
+# collision_unitary: Named joint system-ancilla unitary built at initialization:
+#   - "swap": swap-like collision between the system and the configured ancilla
+#   - "exchange": Jaynes-Cummings-like interaction with a multi-qubit system
+#
+# ancilla_state: Named ancilla input state built at initialization:
+#   - "thermal_qubit": diag(ancilla_alpha, 1 - ancilla_alpha)
+#   - "ground_qubit": |0><0|
+#
+# seed: Random seed for reproducibility (default: 42)
+#
+# noise_options: List of noise channels and their probabilities (default: empty list):
+#   - Each entry should be a tuple of the form (probability, noise_type, gamma)
+#   - noise_type can be:
+#       - "amplitude_damping", 
+#       - "phase_damping", 
+#       - "depolarizing", 
+#       - "bitflip"
+#
+# correlated_noise: Wether to use correlated Kraus operators to apply noise at once on the whole multi-qubit system
+#
+
+[iterate]
+base_name       = "20261506_btfp_amp_"
+n_qubits        = [2, 3, 4]
+beta            = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5]
+
+[settings]
+dt              = 0.031415926
+n_timesteps     = 5
+n_states        = 100
+starting_state  = "thermal"
+recovery_type   = "codespace"
+collision_unitary = "jc"
+ancilla_state   = "ground_qubit"
+ancilla_alpha   = 0.5
+# seed            = 7697
+seed            = 1214
+noise_options = [
+    [0.5, "bitflip", 20.0],
+    [0.5, "amplitude_damping", 20.0],
+]
+real_noise = "bitflip"
+
+correlated_noise = false 
+
+[plots]
+ylims       = [0.35, 1.1]
+xlims       = [0.0, 30.0]
+choices     = true
+plot_title = "codespace_recovery_avg"
