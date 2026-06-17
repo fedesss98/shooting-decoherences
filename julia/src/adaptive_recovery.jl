@@ -209,7 +209,7 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   # ======================================
   # Step 5: Recovery
   rho_rec, _ = apply_collision(model, rho_to_rec; trace=true)
-  rho_initial = state.ρ0
+  rho_initial = state.ρ_codespace0
   prob_codespace = 1.0
   prob_codespace_free = 1.0
   prob_codespace_initial = 1.0
@@ -225,7 +225,7 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
       projection=config.codespace_projection
     )
     rho_initial, prob_codespace_initial = project_to_codespace(
-      state.ρ0, config.n_qubits;
+      state.ρ_codespace0, config.n_qubits;
       real_noise_name=config.real_noise.name,
       projection=config.codespace_projection
     )

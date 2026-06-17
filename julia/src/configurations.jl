@@ -128,6 +128,7 @@ mutable struct RecoveryState
     ρ0::Matrix{ComplexF64}
     ρ_free::Matrix{ComplexF64}
     ρ_rec::Matrix{ComplexF64}
+    ρ_codespace0::Matrix{ComplexF64}
     noise_guess::NoiseObj
     M_total::Matrix{ComplexF64}
     choice::ChoiceSystem
@@ -322,31 +323,37 @@ end
 
 
 function initialize_recovery_state(cfg::RecoveryConfig, noise_options::Vector{NoiseObj})::RecoveryState
-    ρ0 = make_initial_state(cfg)
+    ρ0, ρ_codespace0 = make_initial_state_and_reference(cfg)
     choice = make_initial_choice(cfg.rng, noise_options)
 
     noise_guess = deepcopy(noise_options[choice.current])
     M_total = noise_guess.supermap_noise
 
     return RecoveryState(
-        copy(ρ0), copy(ρ0), copy(ρ0),
+        copy(ρ0), copy(ρ0), copy(ρ0), copy(ρ_codespace0),
         noise_guess, M_total, choice, noise_options
     )
 end
 
 function make_initial_state(cfg::RecoveryConfig)
+    ρ0, _ = make_initial_state_and_reference(cfg)
+    return ρ0
+end
+
+function make_initial_state_and_reference(cfg::RecoveryConfig)
     if cfg.recovery_type == "random"
         ψ = random_state(cfg.n_qubits)
-        return ψ * ψ'
+        ρ0 = ψ * ψ'
+        return ρ0, ρ0
     elseif cfg.recovery_type == "auto"
-        return copy(cfg.sigma)
+        ρ0 = copy(cfg.sigma)
+        return ρ0, ρ0
     elseif cfg.recovery_type == "codespace" || cfg.recovery_type == "codespace_xy"
         sigma = cfg.sigma
         p = rand()
         max_x = p * (1 - p)  # Maximum allowed magnitude for |x|^2
         radius = sqrt(rand() * max_x)
         x = radius * exp(2π * im * rand())
-        ρ = codespace_dm(cfg.n_qubits, p, x)
         ρ = if cfg.recovery_type == "codespace"
             codespace_dm(cfg.n_qubits, p, x)
         else
@@ -355,11 +362,12 @@ function make_initial_state(cfg::RecoveryConfig)
         r = cfg.sigma_mixture
         ρ0 = (1 - r) * ρ + r * sigma
         ρ0 = ρ0 / tr(ρ0)  # Normalize to ensure it's a valid density matrix
-        return ρ0
+        return ρ0, ρ
     elseif cfg.recovery_type == "inputstate"
         a, b = rand(cfg.rng, 2)
         ψ = input_state(cfg.n_qubits, a, b)
-        return ψ * ψ'
+        ρ0 = ψ * ψ'
+        return ρ0, ρ0
     else
         throw(ArgumentError("Unsupported recovery type: $(cfg.recovery_type)"))
     end

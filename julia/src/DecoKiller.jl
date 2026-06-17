@@ -31,6 +31,7 @@ function reset_initial_state!(state::RecoveryState, cfg::RecoveryConfig)
         state.ρ0 .= ρ0
         state.ρ_free .= ρ0
         state.ρ_rec .= ρ0
+        state.ρ_codespace0 .= ρ0
     elseif cfg.recovery_type == "codespace" || cfg.recovery_type == "codespace_xy"
         sigma = cfg.sigma
         p = rand(cfg.rng)
@@ -48,6 +49,7 @@ function reset_initial_state!(state::RecoveryState, cfg::RecoveryConfig)
         state.ρ0 .= ρ0
         state.ρ_free .= ρ0
         state.ρ_rec .= ρ0
+        state.ρ_codespace0 .= ρ
     elseif cfg.recovery_type == "inputstate"
         a, b = rand(cfg.rng, 2)
         ψ0 = input_state(cfg.n_qubits, a, b)
@@ -55,6 +57,7 @@ function reset_initial_state!(state::RecoveryState, cfg::RecoveryConfig)
         state.ρ0 .= ρ0
         state.ρ_free .= ρ0
         state.ρ_rec .= ρ0
+        state.ρ_codespace0 .= ρ0
     end
 end
 
