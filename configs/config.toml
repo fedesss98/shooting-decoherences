@@ -40,29 +40,29 @@
 #
 
 
-name            = "1qbt_amp_phs_auto"
-n_qubits        = 1
-beta            = 2.0
-dt              = 0.31415926
+name            = "test_projection"
+n_qubits        = 2
+beta            = 1.0
+dt              = 0.031415926
 n_timesteps     = 30
-n_states        = 1
+n_states        = 100
 starting_state  = "thermal"
-recovery_type   = "auto"
-sigma_mixture   = 0.5
+recovery_type   = "codespace_xy"
+sigma_mixture   = 0.2
 collision_unitary = "jc"
 ancilla_state   = "ground_qubit"
 ancilla_alpha   = 0.5
 # seed            = 7697
-seed            = 1214
+seed            = 253
 noise_options = [
-    [0.5, "amplitude_damping", 10.0],
     [0.5, "phase_damping", 10.0],
+    [0.5, "general", 10.0],
 ]
-real_noise = "amplitude_damping"
-correlated_noise = true
+real_noise = "phase_damping"
+correlated_noise = false
 
 [plots]
-ylims       = [0.5, 1.01]
-xlims       = [0.0, 30.0]
+ylims       = [0.8, 1.01]
+# xlims       = [0.0, 10.0]
 choices     = true
 plot_title = "codespace_recovery_avg"

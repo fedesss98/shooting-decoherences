@@ -40,7 +40,7 @@
 #
 
 [iterate]
-base_name       = "20261506_btfp_amp_"
+base_name       = "20261706_rand_rand_"
 n_qubits        = [2, 3, 4]
 beta            = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5]
 
@@ -56,10 +56,10 @@ ancilla_alpha   = 0.5
 # seed            = 7697
 seed            = 1214
 noise_options = [
-    [0.5, "bitflip", 20.0],
-    [0.5, "amplitude_damping", 20.0],
+    [0.5, "general", 20.0],
+    [0.5, "general", 20.0],
 ]
-real_noise = "bitflip"
+real_noise = "general"
 
 correlated_noise = false 
 
