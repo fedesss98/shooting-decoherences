@@ -190,11 +190,10 @@ function make_ancilla_state(kind::String, alpha::Float64, dim::Int=default_ancil
     elseif kind == "ground_qudit"
         return Matrix{ComplexF64}(ancilla_ground_state(ComplexF64, dim))
     elseif kind == "mixedstate"
-        return Matrix{ComplexF64}(I,dim,dim)/2
+        return Matrix{ComplexF64}(I, dim, dim) / dim
     elseif kind == "mixture"
         dim == 2 || throw(ArgumentError("mixture requires ancilla_dim = 2"))
-        η = [[alpha 0]; [0 1 - alpha]]
-        return Matrix{ComplexF64}(η)
+        return Matrix{ComplexF64}(ancilla_thermal_qubit(alpha; T=ComplexF64))
     else
         throw(ArgumentError("Unsupported ancilla_state: $kind"))
     end
@@ -203,18 +202,28 @@ end
 
 function make_collision_unitary(kind::String, ds::Int, da::Int; tau::Float64=1.0)::Matrix{ComplexF64}
     if kind == "swap"
+        ds == da || throw(ArgumentError("collision_unitary = \"swap\" requires ancilla_dim = system dimension ($ds); got $da"))
         return _swap_unitary(ds, da)
     elseif kind == "partial_swap"
+        ds == 2 && da == 2 || throw(ArgumentError("collision_unitary = \"partial_swap\" currently requires a single-qubit system and qubit ancilla"))
         return _partial_swap_unitary(ds, da; tau=tau)
     elseif kind == "identity"
         return Matrix{ComplexF64}(I, ds * da, ds * da)
-    elseif kind == "jc"
+    elseif kind == "jc" || kind == "exchange"
         da == 2 || throw(ArgumentError("collision_unitary = \"jc\" requires ancilla_dim = 2"))
         n_qubits = Int(log2(ds))
-        return _n_qubit_exchange_unitary(n_qubits)
+        2^n_qubits == ds || throw(ArgumentError("collision_unitary = \"jc\" requires a qubit system dimension; got $ds"))
+        return _n_qubit_exchange_unitary(n_qubits, 0.1, tau)
     else
         throw(ArgumentError("Unsupported collision_unitary: $kind"))
     end
+end
+
+function get_config_alias(cfg::Dict, canonical::String, aliases...; default=nothing)
+    for key in (canonical, aliases...)
+        haskey(cfg, key) && return cfg[key]
+    end
+    return default
 end
 
 
@@ -226,7 +235,7 @@ function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
     anc_alpha       = get(cfg, "ancilla_alpha", 0.8)
     anc_type        = get(cfg, "ancilla_state", "thermal_qubit")
     ancilla_dim     = get(cfg, "ancilla_dim", default_ancilla_dim(anc_type))
-    collision_type  = get(cfg, "coll_unitary", "swap")
+    collision_type  = get_config_alias(cfg, "collision_unitary", "coll_unitary"; default="swap")
     recover_all     = get(cfg, "recover_all", false)
     n_timesteps     = get(cfg, "n_timesteps", 10)
     n_states        = get(cfg, "n_states", 1)
@@ -277,7 +286,8 @@ end
 
 function setup_experiment_dir(name::String, cfg::Dict)::String
     root_dir = dirname(dirname(@__DIR__))
-    experiment_dir = joinpath(root_dir, "experiments", name)
+    experiments_dir = get(cfg, "experiments_dir", joinpath(root_dir, "experiments"))
+    experiment_dir = joinpath(experiments_dir, name)
 
     mkpath(joinpath(experiment_dir, "logs"))
     mkpath(joinpath(experiment_dir, "visualization"))
