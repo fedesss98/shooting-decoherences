@@ -45,6 +45,13 @@ end
     @test tr(ρ) ≈ 1
     @test ρ * ρ ≈ ρ
 
+    ρ_damped = codespace_dm(3, 3.0, 4.0im; coherence=0.5)
+    @test diag(ρ_damped) ≈ diag(ρ)
+    @test ρ_damped[1, end] ≈ 0.5 * ρ[1, end]
+    @test ρ_damped[end, 1] ≈ 0.5 * ρ[end, 1]
+    @test real(tr(ρ_damped * ρ_damped)) < 1
+    @test minimum(eigvals(Hermitian(ρ_damped))) >= -1e-12
+
     rng_state = Xoshiro(42)
     rng_dm = Xoshiro(42)
     ψ_random = codespace_state(3, rng_state)
@@ -55,6 +62,16 @@ end
     @test tr(ρ_random) ≈ 1
     @test ρ_random * ρ_random ≈ ρ_random
 
+    rng_mixed_state = Xoshiro(99)
+    rng_mixed_dm = Xoshiro(99)
+    ψ_mixed = codespace_state(3, rng_mixed_state)
+    coherence = rand(rng_mixed_state)
+    ρ_mixed_codespace = codespace_dm(3, rng_mixed_dm; pure=false)
+
+    @test diag(ρ_mixed_codespace) ≈ diag(ψ_mixed * ψ_mixed')
+    @test ρ_mixed_codespace[1, end] ≈ coherence * ψ_mixed[1] * conj(ψ_mixed[end])
+    @test real(tr(ρ_mixed_codespace * ρ_mixed_codespace)) < 1
+
     ψ_xy = single_excitation_state(2, Xoshiro(7))
     ρ_xy = single_excitation_dm(2, Xoshiro(7))
 
@@ -62,6 +79,8 @@ end
     @test ψ_xy[1] == 0
     @test ψ_xy[4] == 0
     @test ρ_xy ≈ ψ_xy * ψ_xy'
+    @test single_excitation_dm(2, 3.0, 4.0; coherence=0.25)[2, 3] ≈ 0.25 * 12 / 25
     @test_throws ArgumentError codespace_state(2, 0, 0)
     @test_throws ArgumentError single_excitation_state(3, 1, 0)
+    @test_throws ArgumentError codespace_dm(2, 1, 1; coherence=1.1)
 end
