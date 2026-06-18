@@ -3,6 +3,7 @@ visualization/
 .vscode/
 config_bb84.toml
 experiments/
+testexperiments/
 logs/
 backup*
 
