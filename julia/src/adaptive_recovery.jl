@@ -133,11 +133,17 @@ function project_to_codespace(rho, n_qubits; real_noise_name="", projection="aut
 end
 
 
-function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConfig, logs::RecoveryLogs)
+function iterate_recovery!(
+  step::Int, 
+  state::RecoveryState, 
+  config::RecoveryConfig, 
+  logs::RecoveryLogs;
+  start_with_noise::Bool=true
+)
   length(state.noise_options) == 2 || error("This workflow currently supports exactly 2 noise options")
 
   Ox = config.real_noise.supermap_noise
-  if step == 1 
+  if step == 1 && start_with_noise
     Nx = I(size(config.real_noise.supermap)[1])
     N1 = I(size(config.real_noise.supermap)[1])
     N2 = I(size(config.real_noise.supermap)[1])
