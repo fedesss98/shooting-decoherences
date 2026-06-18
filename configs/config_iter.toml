@@ -19,13 +19,17 @@
 #   - "inputstate": Use a specific input state defined by the user (default: "thermal")
 #
 # collision_unitary: Named joint system-ancilla unitary built at initialization:
-#   - "swap": swap-like collision between the system and the configured ancilla
-#   - "exchange": Jaynes-Cummings-like interaction with a multi-qubit system
+#   - "swap": swap-like collision; requires ancilla_dim = 2^n_qubits
+#   - "partial_swap": partial swap; currently single-qubit system + qubit ancilla
+#   - "identity": no collision
+#   - "jc" / "exchange": Jaynes-Cummings-like interaction with a qubit ancilla
+# coll_time: Interaction time used by "partial_swap" and "jc" / "exchange"
 #
 # ancilla_state: Named ancilla input state built at initialization:
 #   - "thermal_qubit": diag(ancilla_alpha, 1 - ancilla_alpha)
 #   - "ground_qubit": |0><0|
 #   - "ground_qudit": |0><0| in ancilla_dim dimensions
+#   - "mixedstate": maximally mixed state in ancilla_dim dimensions
 # ancilla_dim: Ancilla Hilbert-space dimension (default: 2; ground_qudit defaults to 4)
 #
 # seed: Random seed for reproducibility (default: 42)
@@ -44,30 +48,34 @@
 #
 
 [iterate]
-base_name       = "20261706_rand_rand_"
-n_qubits        = [2, 3, 4]
-beta            = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5]
+base_name       = "test_mxd_btfp_amp_"
+beta            = [0.1, 1.0, 2.0, 5.0, 10.0]
+sigma_mixture   = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
 [settings]
+n_qubits        = 2
 dt              = 0.031415926
 n_timesteps     = 5
-n_states        = 100
+n_states        = 10
 starting_state  = "thermal"
-recovery_type   = "codespace"
+recovery_type   = "codespace_mxd"
 collision_unitary = "jc"
 ancilla_state   = "ground_qubit"
 ancilla_dim     = 2
 ancilla_alpha   = 0.5
+coll_time       = 0.1
+code_projection = "none"
 # seed            = 7697
 seed            = 1214
 noise_options = [
-    [0.5, "general", 20.0],
-    [0.5, "general", 20.0],
+    [0.5, "bitflip", 20.0],
+    [0.5, "amplitude_damping", 20.0],
 ]
-real_noise = "general"
-
 correlated_noise = false 
-# pin = false
+real_noise = "bitflip"
+
+pin             = true
+recover_all     = true
 
 [plots]
 ylims       = [0.35, 1.1]
