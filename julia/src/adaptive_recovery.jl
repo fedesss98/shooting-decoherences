@@ -114,21 +114,25 @@ end
 function project_to_codespace(rho, n_qubits; real_noise_name="", projection="auto")
     dim = 2^n_qubits
 
+    if projection == "none"
+      return rho, 1.0
+    end
+
     P = zeros(ComplexF64, dim, dim)
     projection_name = projection == "auto" ? (
         real_noise_name == "bitflip" || real_noise_name == "phase_damping" ? "xy" : "00_11"
     ) : projection
 
     if projection_name == "00_11"
-        # For amplitude damping, the code space is spanned by |00> and |11>
-        P[1, 1] = 1.0   # |0...0><0...0|
-        P[dim, dim] = 1.0   # |1...1><1...1|
+      # For amplitude damping, the code space is spanned by |00> and |11>
+      P[1, 1] = 1.0   # |0...0><0...0|
+      P[dim, dim] = 1.0   # |1...1><1...1|
     elseif projection_name == "xy"
-        # For bitflip and phase damping, the code space is spanned by |01> and |10>
-        P[2, 2] = 1.0   # |01><01|
-        P[3, 3] = 1.0   # |10><10|
+      # For bitflip and phase damping, the code space is spanned by |01> and |10>
+      P[2, 2] = 1.0   # |01><01|
+      P[3, 3] = 1.0   # |10><10|
     else
-        error("Unknown codespace projection: $projection. Use \"auto\", \"00_11\", or \"xy\".")
+      error("Unknown codespace projection: $projection. Use \"auto\", \"00_11\", or \"xy\".")
     end
 
     rho_proj = P * rho * P
@@ -151,13 +155,13 @@ function iterate_recovery!(
 
   Ox = config.real_noise.supermap_noise
   if step == 1 && start_with_noise
-    Nx = I(size(config.real_noise.supermap)[1])
-    N1 = I(size(config.real_noise.supermap)[1])
-    N2 = I(size(config.real_noise.supermap)[1])
-  else
     Nx = config.real_noise.supermap
     N1 = state.noise_options[1].supermap
     N2 = state.noise_options[2].supermap
+  else
+    Nx = I(size(config.real_noise.supermap)[1])
+    N1 = I(size(config.real_noise.supermap)[1])
+    N2 = I(size(config.real_noise.supermap)[1])
   end
 
   maps_to_log = (Nx=copy(Nx), N1=copy(N1), N2=copy(N2))
