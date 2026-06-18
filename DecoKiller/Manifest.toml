@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "0be6e442b4f6b71cb1e486d14661c20af70db00e"
+project_hash = "a635520226ef7816245d21cce096c70673953653"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "bbc22a9a08a0ef6460041086d8a7b27940ed4ffd"
@@ -371,6 +371,12 @@ deps = ["Artifacts", "Expat_jll", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "473e9afc9cf30814eb67ffa5f2db7df82c3ad9fd"
 uuid = "ee1fde0b-3d02-5ea6-8484-8dfef6360eab"
 version = "1.16.2+0"
+
+[[deps.DecoKiller]]
+deps = ["CSV", "DataFrames", "Dates", "IJulia", "JLD2", "JSON", "JuliaFormatter", "LaTeXStrings", "Latexify", "LinearAlgebra", "Logging", "LoggingExtras", "Plots", "ProgressBars", "ProgressLogging", "ProgressMeter", "QuantumOptics", "Random", "Revise", "StatsBase", "TOML", "TerminalLoggers"]
+path = "."
+uuid = "9d661fdd-f634-4227-8704-23255d504b55"
+version = "0.2.0"
 
 [[deps.DelimitedFiles]]
 deps = ["Mmap"]
