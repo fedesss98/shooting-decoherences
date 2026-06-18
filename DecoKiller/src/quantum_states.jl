@@ -136,6 +136,25 @@ function _random_codespace_amplitudes(rng::AbstractRNG)
     return sqrt(p), sqrt(1 - p) * exp(-im * phase)
 end
 
+function _coherence_scale(coherence::Real)
+    0 <= coherence <= 1 || throw(ArgumentError("coherence must be in [0, 1]"))
+    return Float64(coherence)
+end
+
+function _coherence_scale(rng::Union{Nothing,AbstractRNG}, pure::Bool, coherence)
+    coherence !== nothing && return _coherence_scale(coherence)
+    pure && return 1.0
+    return rng === nothing ? 0.0 : rand(rng)
+end
+
+function _damped_codespace_dm(psi::Vector{ComplexF64}, i::Int, j::Int, coherence::Real)
+    rho = psi * psi'
+    scale = _coherence_scale(coherence)
+    rho[i, j] *= scale
+    rho[j, i] *= scale
+    return rho
+end
+
 """
     codespace_state(n_qubits, alpha0, alpha1)
     codespace_state(n_qubits, rng)
@@ -177,24 +196,37 @@ function single_excitation_state(n_qubits, rng::AbstractRNG)
     return single_excitation_state(n_qubits, alpha0, alpha1)
 end
 
-function codespace_dm(n_qubits, alpha0, alpha1)
+"""
+    codespace_dm(n_qubits, alpha0, alpha1; pure=true, coherence=nothing)
+    codespace_dm(n_qubits, rng; pure=true, coherence=nothing)
+
+Create a density matrix supported on `|00...0>` and `|11...1>`.
+By default this is the pure-state outer product. Set `coherence < 1`, or
+use `pure=false` with an RNG, to keep the same populations while reducing
+the off-diagonal coherences.
+"""
+function codespace_dm(n_qubits, alpha0, alpha1; pure::Bool=true, coherence=nothing)
     psi = codespace_state(n_qubits, alpha0, alpha1)
-    return psi * psi'
+    scale = _coherence_scale(nothing, pure, coherence)
+    return _damped_codespace_dm(psi, 1, length(psi), scale)
 end
 
-function codespace_dm(n_qubits, rng::AbstractRNG)
+function codespace_dm(n_qubits, rng::AbstractRNG; pure::Bool=true, coherence=nothing)
     psi = codespace_state(n_qubits, rng)
-    return psi * psi'
+    scale = _coherence_scale(rng, pure, coherence)
+    return _damped_codespace_dm(psi, 1, length(psi), scale)
 end
 
-function single_excitation_dm(n_qubits, alpha0, alpha1)
+function single_excitation_dm(n_qubits, alpha0, alpha1; pure::Bool=true, coherence=nothing)
     psi = single_excitation_state(n_qubits, alpha0, alpha1)
-    return psi * psi'
+    scale = _coherence_scale(nothing, pure, coherence)
+    return _damped_codespace_dm(psi, 2, 3, scale)
 end
 
-function single_excitation_dm(n_qubits, rng::AbstractRNG)
+function single_excitation_dm(n_qubits, rng::AbstractRNG; pure::Bool=true, coherence=nothing)
     psi = single_excitation_state(n_qubits, rng)
-    return psi * psi'
+    scale = _coherence_scale(rng, pure, coherence)
+    return _damped_codespace_dm(psi, 2, 3, scale)
 end
 
 """
