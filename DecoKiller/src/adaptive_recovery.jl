@@ -113,10 +113,8 @@ end
 
 function project_to_codespace(rho, n_qubits; real_noise_name="", projection="auto")
   dim = 2^n_qubits
-  @debug "Projection" projection
 
-  if projection == "none"
-    @debug "Into the loop"
+  if projection === "none"
     return rho, 1.0
   end
 
@@ -215,9 +213,11 @@ function iterate_recovery!(
   C1 = collapse_map(ptrace_ancilla(rho1_, ds, da), rho1; pin=config.pin)
   C2 = collapse_map(ptrace_ancilla(rho2_, ds, da), rho2; pin=config.pin)
 
-  Nx = Cx * Xi * Nx
-  N1 = C1 * Xi1 * N1
-  N2 = C2 * Xi2 * N2
+  if config.recover_all
+    Nx = Cx * Xi * Nx
+    N1 = C1 * Xi1 * N1
+    N2 = C2 * Xi2 * N2
+  end
 
   # ======================================
   # Step 4: Update noise guess and recovery map
@@ -228,10 +228,14 @@ function iterate_recovery!(
   # ======================================
   # Step 5: Recovery
   rho_rec, _ = apply_collision(model, rho_to_rec; trace=true)
-  rho_initial = state.ρ_codespace0
   prob_codespace = 1.0
   prob_codespace_free = 1.0
   prob_codespace_initial = 1.0
+  rho_initial = if config.codespace_projection === "none"
+    state.ρ0
+  else
+    state.ρ_codespace0
+  end
   if config.n_qubits > 1
     rho_rec, prob_codespace = project_to_codespace(
       rho_rec, config.n_qubits;
@@ -244,7 +248,7 @@ function iterate_recovery!(
       projection=config.codespace_projection
     )
     rho_initial, prob_codespace_initial = project_to_codespace(
-      state.ρ_codespace0, config.n_qubits;
+      rho_initial, config.n_qubits;
       real_noise_name=config.real_noise.name,
       projection=config.codespace_projection
     )
@@ -252,6 +256,7 @@ function iterate_recovery!(
   @debug "Initial rho" rho_initial
   @debug "Recovered rho" rho_rec
   @debug "Free rho" rho_free
+  # rho_initial = state.ρ0
   fid_initial = fidelity(rho_initial, rho_rec)
   fid_track = fidelity(rho_initial, rho_free)
 
@@ -260,7 +265,9 @@ function iterate_recovery!(
   # Save superoperators at current step
   push!(logs.maps, (
     Nx=copy(Nx), N1=copy(N1), N2=copy(N2),
-    P=copy(P), Cx=copy(Cx), Xi=copy(Xi)
+    P=copy(P),
+    Cx=copy(Cx),  # Placeholder for collapse map, not used in this version
+    Xi=copy(Xi)
   ))
   push!(logs.ref_fidelities, fid_track)
   push!(logs.fidelities, fid_initial)
