@@ -226,7 +226,7 @@ function _swap_unitary(ds::Int, da::Int)
 end
 
 function _partial_swap_unitary(ds::Int, da::Int; tau=1.0)
-    U = zeros(ComplexF64, ds * da, ds * da)
+    ds == 2 && da == 2 || throw(ArgumentError("_partial_swap_unitary currently requires ds = da = 2"))
     sp = [0.0 1.0; 0.0 0.0]
     sm = [0.0 0.0; 1.0 0.0]
     H = kron(sp, sm) + kron(sm, sp)
