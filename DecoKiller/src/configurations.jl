@@ -75,6 +75,7 @@ struct RecoveryConfig
     noise_options::Vector{NoiseObj}
     real_noise_idx::Int
     codespace_projection::String
+    recover_all::Bool
     pin::Bool
 end
 
@@ -100,6 +101,8 @@ function RecoveryConfig(
     noise_options::Union{Nothing,Vector{NoiseObj}}=nothing,
     real_noise_idx::Int=0,
     codespace_projection::String="auto",
+    tau::Float64=1.0,
+    recover_all::Bool=true,
     pin::Bool=false
 )
     ancilla_state = make_ancilla_state(ancilla_state_name, ancilla_alpha, ancilla_dim)
@@ -107,6 +110,7 @@ function RecoveryConfig(
         collision_unitary_name,
         2^n_qubits,
         size(ancilla_state, 1),
+        tau=tau
     )
 
     return RecoveryConfig(
@@ -114,7 +118,7 @@ function RecoveryConfig(
         n_qubits, n_timesteps, n_states, seed, rng, dt, ancilla_alpha, ancilla_dim,
         ancilla_state_name, collision_unitary_name, ancilla_state, collision_unitary,
         correlated_noise, plots_options, isnothing(noise_options) ? NoiseObj[real_noise] : noise_options,
-        real_noise_idx, codespace_projection, pin
+        real_noise_idx, codespace_projection, recover_all, pin
     )
 end
 
@@ -185,6 +189,8 @@ function make_ancilla_state(kind::String, alpha::Float64, dim::Int=default_ancil
         return Matrix{ComplexF64}(ancilla_ground_state(ComplexF64, 2))
     elseif kind == "ground_qudit"
         return Matrix{ComplexF64}(ancilla_ground_state(ComplexF64, dim))
+    elseif kind == "mixedstate"
+        return Matrix{ComplexF64}(I,dim,dim)/2
     elseif kind == "mixture"
         dim == 2 || throw(ArgumentError("mixture requires ancilla_dim = 2"))
         η = [[alpha 0]; [0 1 - alpha]]
@@ -195,9 +201,13 @@ function make_ancilla_state(kind::String, alpha::Float64, dim::Int=default_ancil
 end
 
 
-function make_collision_unitary(kind::String, ds::Int, da::Int)::Matrix{ComplexF64}
+function make_collision_unitary(kind::String, ds::Int, da::Int; tau::Float64=1.0)::Matrix{ComplexF64}
     if kind == "swap"
         return _swap_unitary(ds, da)
+    elseif kind == "partial_swap"
+        return _partial_swap_unitary(ds, da; tau=tau)
+    elseif kind == "identity"
+        return Matrix{ComplexF64}(I, ds * da, ds * da)
     elseif kind == "jc"
         da == 2 || throw(ArgumentError("collision_unitary = \"jc\" requires ancilla_dim = 2"))
         n_qubits = Int(log2(ds))
@@ -209,23 +219,25 @@ end
 
 
 function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
-    name = get(cfg, "name", "test")
-    n_qubits = get(cfg, "n_qubits", 1)
-    beta = get(cfg, "beta", 2.0)
-    dt = get(cfg, "dt", 0.1)
-    anc_alpha = get(cfg, "ancilla_alpha", 0.8)
-    anc_type = get(cfg, "ancilla_state", "thermal_qubit")
-    ancilla_dim = get(cfg, "ancilla_dim", default_ancilla_dim(anc_type))
-    collision_type = get(cfg, "coll_unitary", "swap")
-    n_timesteps = get(cfg, "n_timesteps", 10)
-    n_states = get(cfg, "n_states", 1)
-    seed = get(cfg, "seed", 42)
-    recovery_type = get(cfg, "recovery_type", "auto")
-    starting_state = get(cfg, "starting_state", "thermal")
-    sigma_mixture = get(cfg, "sigma_mixture", 0.5)
+    name            = get(cfg, "name", "test")
+    n_qubits        = get(cfg, "n_qubits", 1)
+    beta            = get(cfg, "beta", 2.0)
+    dt              = get(cfg, "dt", 0.1)
+    anc_alpha       = get(cfg, "ancilla_alpha", 0.8)
+    anc_type        = get(cfg, "ancilla_state", "thermal_qubit")
+    ancilla_dim     = get(cfg, "ancilla_dim", default_ancilla_dim(anc_type))
+    collision_type  = get(cfg, "coll_unitary", "swap")
+    recover_all     = get(cfg, "recover_all", false)
+    n_timesteps     = get(cfg, "n_timesteps", 10)
+    n_states        = get(cfg, "n_states", 1)
+    seed            = get(cfg, "seed", 42)
+    recovery_type   = get(cfg, "recovery_type", "auto")
+    starting_state  = get(cfg, "starting_state", "thermal")
+    sigma_mixture   = get(cfg, "sigma_mixture", 0.5)
+    tau             = get(cfg, "coll_time", 1.0)
+    pin             = get(cfg, "pin", false)
     correlated_noise = get(cfg, "correlated_noise", false)
     codespace_projection = get(cfg, "code_projection", "auto")
-    pin = get(cfg, "pin", false)
     plots_options = Dict{Symbol,Any}(Symbol(k) => v for (k, v) in get(cfg, "plots", Dict{String,Any}()))
 
     rng = make_rng(seed)
@@ -257,7 +269,8 @@ function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
         noise_options=noise_options,
         real_noise_idx=real_noise_idx,
         codespace_projection=codespace_projection,
-        pin=pin
+        recover_all=recover_all,
+        pin=pin, tau=tau
     )
 end
 
@@ -365,12 +378,16 @@ function make_initial_state_and_reference(cfg::RecoveryConfig)
     elseif cfg.recovery_type == "auto"
         ρ0 = copy(cfg.sigma)
         return ρ0, ρ0
-    elseif cfg.recovery_type == "codespace" || cfg.recovery_type == "codespace_xy"
+    elseif occursin("codespace", cfg.recovery_type)
         sigma = cfg.sigma
-        ρ = if cfg.recovery_type == "codespace"
-            codespace_dm(cfg.n_qubits, cfg.rng)
+        if cfg.recovery_type == "codespace"
+            ρ = codespace_dm(cfg.n_qubits, cfg.rng)
+        elseif cfg.recovery_type == "codespace_xy"
+            ρ = single_excitation_dm(cfg.n_qubits, cfg.rng)
+        elseif cfg.recovery_type == "codespace_mxd"
+            ρ = codespace_dm(cfg.n_qubits, cfg.rng; pure=false)
         else
-            single_excitation_dm(cfg.n_qubits, cfg.rng)
+            throw(ArgumentError("Unsupported recovery type: $(cfg.recovery_type)"))
         end
         r = cfg.sigma_mixture
         ρ0 = (1 - r) * ρ + r * sigma
