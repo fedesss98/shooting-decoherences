@@ -6,9 +6,11 @@ function discrimin(ρ_test, ρ1, ρ2, ds, da, q1::Real=0.5, q2::Real=0.5, tol=1e
   size(ρ1) == (ds * da, ds * da) || error("ρ1 has incompatible dimensions")
   size(ρ2) == (ds * da, ds * da) || error("ρ2 has incompatible dimensions")
 
+  # Trace out the system to get the reduced states of the ancilla
   η_test = ptrace_sys(ρ_test, ds, da)
   η1 = ptrace_sys(ρ1, ds, da)
   η2 = ptrace_sys(ρ2, ds, da)
+
   Δη = q1 * η1 - q2 * η2
 
   # Early exit: states are indistinguishable, return uniform
@@ -17,7 +19,7 @@ function discrimin(ρ_test, ρ1, ρ2, ds, da, q1::Real=0.5, q2::Real=0.5, tol=1e
   end
 
   eigen_decomp = eigen(Hermitian(Δη))
-  eigenvalues = eigen_decomp.values
+  eigenvalues  = eigen_decomp.values
   eigenvectors = eigen_decomp.vectors
 
   Π1 = zeros(ComplexF64, da, da)
@@ -31,8 +33,10 @@ function discrimin(ρ_test, ρ1, ρ2, ds, da, q1::Real=0.5, q2::Real=0.5, tol=1e
 
   p1 = real(tr(Π1 * η_test))
   p2 = real(tr(Π2 * η_test))
-  total = max(p1 + p2, tol)
-  return [p1 / total, p2 / total], [Matrix(Π1), Matrix(Π2)]
+
+  # Numerical sanity: p1 + p2 should be 1
+  total = p1 + p2
+  return [p1/total, p2/total], [Π1, Π2]
 end
 
 function collapse_state(ρ_SA, Π)
@@ -65,6 +69,8 @@ function collapse_map(input_state, output_state; pin=true)
   eigen_decomp = eigen(Hermitian(output_state), sortby = x -> -real(x))
   q            = clean_eigenvalues(eigen_decomp.values)
   phi_out      = eigen_decomp.vectors
+
+  # @debug "Stochastic projection probabilities" p q
 
   basis = Matrix{ComplexF64}(I, d, d)
   U1 = stochastic_projection(psi_in, basis)
@@ -101,6 +107,7 @@ function update_noise_guess!(state::RecoveryState, povm::Int)
   end
   push!(state.choice.history, state.choice.current)
   return nothing
+
 end
 
 
@@ -153,6 +160,8 @@ function iterate_recovery!(
     N2 = state.noise_options[2].supermap
   end
 
+  maps_to_log = (Nx=copy(Nx), N1=copy(N1), N2=copy(N2))
+
   ds = 2^config.n_qubits
 
   # ======================================
@@ -191,6 +200,7 @@ function iterate_recovery!(
   q1 = state.noise_options[1].probability
   q2 = state.noise_options[2].probability
   w, Πs = discrimin(rho_to_rec_, rho1_, rho2_, ds, da, q1, q2)
+  @debug "Discrimination probabilities" w
   povm = sample(config.rng, [1, 2], Weights(w))
 
   # Collapse the system and trace out the ancilla
@@ -253,9 +263,12 @@ function iterate_recovery!(
   push!(logs.codespace_overlaps[2], prob_codespace_free)
   push!(logs.codespace_overlaps[3], prob_codespace_initial)
 
-  config.real_noise.supermap = P * Nx
-  state.noise_options[1].supermap = P * N1
-  state.noise_options[2].supermap = P * N2
+  # Update the noise options for the next iteration, 
+  #  with the past Petz recovery applied 
+  #  and the next noise to be applied
+  config.real_noise.supermap = Ox * P * Nx
+  state.noise_options[1].supermap = O1 * P * N1
+  state.noise_options[2].supermap = O2 * P * N2
 
   return nothing
 end

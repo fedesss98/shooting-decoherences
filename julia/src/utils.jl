@@ -373,7 +373,6 @@ end
 
 function embed_operator(op::Matrix, target_index::Int, n::Int)
     I2 = [1.0 0.0; 0.0 1.0] # 2x2 Identity
-
     # Start the Kronecker product chain
     result = (target_index == 1) ? op : I2
     for i in 2:n
@@ -383,10 +382,41 @@ function embed_operator(op::Matrix, target_index::Int, n::Int)
     return result
 end
 
+
+function clean_probability_vector(x; tol=1e-12)
+    p = Float64.(real.(x))
+
+    p[abs.(p) .< tol] .= 0.0
+
+    if any(p .< -tol)
+        error("Invalid probability vector: negative entry $(minimum(p))")
+    end
+
+    p .= max.(p, 0.0)
+
+    s = sum(p)
+    s > tol || error("Invalid probability vector: total weight is zero")
+
+    return p ./ s
+end
+
+
+function project_zero_marginals!(A)
+    m, n = size(A)
+
+    rowA = sum(A, dims=2)
+    colA = sum(A, dims=1)
+    totalA = sum(A)
+
+    A .= A .- rowA ./ n .- colA ./ m .+ totalA / (m * n)
+
+    return A
+end
+
 """
-  stochastic_transition(p, q; A=nothing, tol=1e-12)
-Given two probability distributions p and q, construct a stochastic transition matrix T such that T * p = q.
-This is done by first constructing a transport plan R = q * p' + A, 
+  stochastic_transition(p, q; A=nothing, tol=1e-12, checktol=1e-8, safety=1e-10)
+Given two probability distributions p and q, construct a stochastic transition matrix T such that T*p = q.
+This is done by first constructing a transport plan R = q*p' + A, 
 where A is an optional adjustment matrix to ensure positivity and stability.
 Then, T is obtained by normalizing the columns of R by p. 
 If p[i] is zero, the corresponding column of T is set to q (arbitrary stochastic column, 
@@ -394,66 +424,71 @@ since it does not affect the result).
 The function also includes checks to ensure that R is a valid transport plan
 (non-negative and with correct marginals), and that T is a valid stochastic matrix.
 """
-function stochastic_transition(p, q; A=nothing, tol=1e-12, checktol=1e-12)
-    p = collect(float.(p))
-    q = collect(float.(q))
-
-    # Normalize defensively
-    p ./= sum(p)
-    q ./= sum(q)
+function stochastic_transition(p, q; A=nothing, tol=1e-12, checktol=1e-8, safety=1e-10)
+    p = clean_probability_vector(p; tol=tol)
+    q = clean_probability_vector(q; tol=tol)
 
     n = length(p)
     m = length(q)
 
+    R0 = q * p'   # always valid
+
     if A === nothing
-        A = zeros(m, n)
+        R = copy(R0)
     else
-        A = copy(float.(A))
+        A = Matrix{Float64}(A)
+
+        size(A) == (m, n) || error("A has size $(size(A)), expected $((m, n))")
+
+        project_zero_marginals!(A)
+
+        # Choose largest α ∈ [0, 1] such that R0 + αA ≥ 0
+        negative_A = A .< 0
+
+        if any(negative_A)
+            αmax = minimum(R0[negative_A] ./ (-A[negative_A]))
+            α = min(1.0, max(0.0, (1.0 - safety) * αmax))
+        else
+            α = 1.0
+        end
+
+        R = R0 + α * A
+
+        # Clean only tiny numerical negatives
+        tiny_negative = (R .< 0.0) .& (R .> -tol)
+        R[tiny_negative] .= 0.0
+
+        # Absolute fallback: if something still went wrong, use the guaranteed plan
+        if any(R .< -tol)
+            @warn "A could not be made feasible; falling back to independent transport plan q*p'."
+            R = copy(R0)
+        end
     end
 
-    # Project A so that its row and column sums vanish
-    rowA = sum(A, dims=2)              # m × 1
-    colA = sum(A, dims=1)              # 1 × n
-    totalA = sum(A)
+    colerr = maximum(abs.(vec(sum(R, dims=1)) .- p))
+    rowerr = maximum(abs.(vec(sum(R, dims=2)) .- q))
 
-    A .= A .- rowA ./ n .- colA ./ m .+ totalA / (m * n)
-
-    R = q * p' + A
-
-    # Clean tiny numerical noise
-    R[abs.(R).<tol] .= 0.0
-
-    if any(R .< -tol)
-        error("Invalid transport plan: some entries of R are negative.")
+    if colerr > checktol || rowerr > checktol
+        @warn "Transport plan lost marginals; falling back to independent transport plan q*p'." colerr rowerr
+        R = copy(R0)
     end
 
-    # Optional clipping after negativity check
-    R .= max.(R, 0.0)
-
-    # Check marginals
-    if maximum(abs.(sum(R, dims=1)[:] .- p)) > checktol
-        error("Invalid transport plan: column sums of R are not p.")
-    end
-
-    if maximum(abs.(sum(R, dims=2)[:] .- q)) > checktol
-        error("Invalid transport plan: row sums of R are not q.")
-    end
-
-    T = zeros(m, n)
+    T = zeros(Float64, m, n)
 
     for i in 1:n
         if p[i] > tol
             T[:, i] = R[:, i] ./ p[i]
         else
-            # Arbitrary stochastic column, because this column does not affect E(alpha)
+            # This column is irrelevant because p[i] = 0
             T[:, i] = q
         end
     end
 
-    # Numerical cleanup
-    T[abs.(T).<tol] .= 0.0
+    # Clean tiny numerical noise
+    T[abs.(T) .< tol] .= 0.0
+    T .= max.(T, 0.0)
 
-    # Defensive column normalization
+    # Ensure every column is stochastic
     for i in 1:n
         s = sum(T[:, i])
         if s > tol
@@ -461,6 +496,15 @@ function stochastic_transition(p, q; A=nothing, tol=1e-12, checktol=1e-12)
         else
             T[:, i] .= q
         end
+    end
+
+    # Final sanity check
+    if maximum(abs.(sum(T, dims=1)[:] .- 1.0)) > checktol
+        error("Invalid transition matrix: columns are not normalized.")
+    end
+
+    if maximum(abs.(T * p .- q)) > checktol
+        error("Invalid transition matrix: T*p is not q.")
     end
 
     return T
