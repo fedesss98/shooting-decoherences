@@ -15,11 +15,11 @@ function discrimin(ρ_test, ρ1, ρ2, ds, da, q1::Real=0.5, q2::Real=0.5, tol=1e
 
   # Early exit: states are indistinguishable, return uniform
   if norm(Δη) < tol
-      return [0.5, 0.5], [0.5*I(da), 0.5*I(da)]
+    return [0.5, 0.5], [0.5*I(da), 0.5*I(da)]
   end
 
   eigen_decomp = eigen(Hermitian(Δη))
-  eigenvalues  = eigen_decomp.values
+  eigenvalues = eigen_decomp.values
   eigenvectors = eigen_decomp.vectors
 
   Π1 = zeros(ComplexF64, da, da)
@@ -62,13 +62,13 @@ function collapse_map(input_state, output_state; pin=true)
     return states_out * states_in'
   end
 
-  eigen_decomp = eigen(Hermitian(input_state), sortby = x -> -real(x))
-  p            = clean_eigenvalues(eigen_decomp.values)
-  psi_in       = eigen_decomp.vectors
+  eigen_decomp = eigen(Hermitian(input_state), sortby=x -> -real(x))
+  p = clean_eigenvalues(eigen_decomp.values)
+  psi_in = eigen_decomp.vectors
 
-  eigen_decomp = eigen(Hermitian(output_state), sortby = x -> -real(x))
-  q            = clean_eigenvalues(eigen_decomp.values)
-  phi_out      = eigen_decomp.vectors
+  eigen_decomp = eigen(Hermitian(output_state), sortby=x -> -real(x))
+  q = clean_eigenvalues(eigen_decomp.values)
+  phi_out = eigen_decomp.vectors
 
   # @debug "Stochastic projection probabilities" p q
 
@@ -112,56 +112,58 @@ end
 
 
 function project_to_codespace(rho, n_qubits; real_noise_name="", projection="auto")
-    dim = 2^n_qubits
+  dim = 2^n_qubits
+  @debug "Projection" projection
 
-    if projection == "none"
-      return rho, 1.0
-    end
+  if projection == "none"
+    @debug "Into the loop"
+    return rho, 1.0
+  end
 
-    P = zeros(ComplexF64, dim, dim)
-    projection_name = projection == "auto" ? (
-        real_noise_name == "bitflip" || real_noise_name == "phase_damping" ? "xy" : "00_11"
-    ) : projection
+  P = zeros(ComplexF64, dim, dim)
+  projection_name = projection == "auto" ? (
+    real_noise_name == "bitflip" || real_noise_name == "phase_damping" ? "xy" : "00_11"
+  ) : projection
 
-    if projection_name == "00_11"
-      # For amplitude damping, the code space is spanned by |00> and |11>
-      P[1, 1] = 1.0   # |0...0><0...0|
-      P[dim, dim] = 1.0   # |1...1><1...1|
-    elseif projection_name == "xy"
-      # For bitflip and phase damping, the code space is spanned by |01> and |10>
-      P[2, 2] = 1.0   # |01><01|
-      P[3, 3] = 1.0   # |10><10|
-    else
-      error("Unknown codespace projection: $projection. Use \"auto\", \"00_11\", or \"xy\".")
-    end
+  if projection_name == "00_11"
+    # For amplitude damping, the code space is spanned by |00> and |11>
+    P[1, 1] = 1.0   # |0...0><0...0|
+    P[dim, dim] = 1.0   # |1...1><1...1|
+  elseif projection_name == "xy"
+    # For bitflip and phase damping, the code space is spanned by |01> and |10>
+    P[2, 2] = 1.0   # |01><01|
+    P[3, 3] = 1.0   # |10><10|
+  else
+    error("Unknown codespace projection: $projection. Use \"auto\", \"00_11\", or \"xy\".")
+  end
 
-    rho_proj = P * rho * P
-    prob = real(tr(rho_proj))
+  rho_proj = P * rho * P
+  prob = real(tr(rho_proj))
 
-    prob > 0 || throw(ArgumentError("state has zero overlap with the code space"))
+  prob > 0 || throw(ArgumentError("state has zero overlap with the code space"))
 
-    return rho_proj / prob, prob
+  return rho_proj / prob, prob
 end
 
 
 function iterate_recovery!(
-  step::Int, 
-  state::RecoveryState, 
-  config::RecoveryConfig, 
+  step::Int,
+  state::RecoveryState,
+  config::RecoveryConfig,
   logs::RecoveryLogs;
   start_with_noise::Bool=true
 )
   length(state.noise_options) == 2 || error("This workflow currently supports exactly 2 noise options")
 
   Ox = config.real_noise.supermap_noise
-  if step == 1 && start_with_noise
-    Nx = config.real_noise.supermap
-    N1 = state.noise_options[1].supermap
-    N2 = state.noise_options[2].supermap
-  else
+  if step == 1 && !start_with_noise
     Nx = I(size(config.real_noise.supermap)[1])
     N1 = I(size(config.real_noise.supermap)[1])
     N2 = I(size(config.real_noise.supermap)[1])
+  else
+    Nx = config.real_noise.supermap
+    N1 = state.noise_options[1].supermap
+    N2 = state.noise_options[2].supermap
   end
 
   ds = 2^config.n_qubits
@@ -185,7 +187,7 @@ function iterate_recovery!(
   rho_to_rec_ = apply_collision(model, rho_to_rec; ancilla_state=η, trace=false)
   rho1_ = apply_collision(model, rho1; ancilla_state=η, trace=false)
   rho2_ = apply_collision(model, rho2; ancilla_state=η, trace=false)
-  
+
   # Apply noise only to the system
   n_subsystems = config.correlated_noise ? 1 : config.n_qubits
   rho_to_rec_ = apply_extended_channel(rho_to_rec_, real_kraus; dim_to_extend=da)
@@ -202,7 +204,6 @@ function iterate_recovery!(
   q1 = state.noise_options[1].probability
   q2 = state.noise_options[2].probability
   w, Πs = discrimin(rho_to_rec_, rho1_, rho2_, ds, da, q1, q2)
-  @debug "Discrimination probabilities" w
   povm = sample(config.rng, [1, 2], Weights(w))
 
   # Collapse the system and trace out the ancilla
@@ -248,16 +249,19 @@ function iterate_recovery!(
       projection=config.codespace_projection
     )
   end
+  @debug "Initial rho" rho_initial
+  @debug "Recovered rho" rho_rec
+  @debug "Free rho" rho_free
   fid_initial = fidelity(rho_initial, rho_rec)
-  fid_track = fidelity(rho_initial,  rho_free)
+  fid_track = fidelity(rho_initial, rho_free)
 
   # ======================================
   # Step 6: Updates for the next iteration
   # Save superoperators at current step
   push!(logs.maps, (
-    Nx=copy(Nx), N1=copy(N1), N2=copy(N2), 
+    Nx=copy(Nx), N1=copy(N1), N2=copy(N2),
     P=copy(P), Cx=copy(Cx), Xi=copy(Xi)
-    ))
+  ))
   push!(logs.ref_fidelities, fid_track)
   push!(logs.fidelities, fid_initial)
   push!(logs.choice_history, state.choice.current)

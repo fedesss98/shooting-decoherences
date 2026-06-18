@@ -4,6 +4,7 @@ visualization/
 config_bb84.toml
 experiments/
 logs/
+backup*
 
 notebooks/*.jl
 
