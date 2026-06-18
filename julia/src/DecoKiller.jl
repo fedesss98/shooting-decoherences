@@ -146,6 +146,8 @@ function save_results!(cfg::RecoveryConfig, state::RecoveryState, logs::Recovery
         "real_noise_idx" => cfg.real_noise_idx,
         "noise_options" => [n.name for n in state.noise_options],
         "codespace_projection" => cfg.codespace_projection,
+        "pin" => cfg.pin,
+        "ancilla_dim" => cfg.ancilla_dim,
     )
 
     open(meta_file, "w") do io
@@ -158,6 +160,7 @@ function save_results!(cfg::RecoveryConfig, state::RecoveryState, logs::Recovery
         "real_noise_idx" => cfg.real_noise_idx,
         "noise_options_kraus" => [n.extended_kraus for n in state.noise_options],
         "ancilla_state" => cfg.ancilla_state_name,
+        "ancilla_dim" => cfg.ancilla_dim,
         "collision_unitary" => cfg.collision_unitary_name,
         "maps" => _serialize_maps(logs)
     )

@@ -44,7 +44,7 @@ const CSV_FIELDS_PRE_NOISE = [
     "n_qubits", "beta",
     "dt", "n_timesteps", "n_states",
     "starting_state", "recovery_type",
-    "collision_unitary", "ancilla_state", "ancilla_alpha",
+    "collision_unitary", "ancilla_state", "ancilla_dim", "ancilla_alpha",
     "seed",
 ]
 const CSV_FIELDS_POST_NOISE = [

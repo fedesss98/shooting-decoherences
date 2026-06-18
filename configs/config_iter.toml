@@ -25,6 +25,8 @@
 # ancilla_state: Named ancilla input state built at initialization:
 #   - "thermal_qubit": diag(ancilla_alpha, 1 - ancilla_alpha)
 #   - "ground_qubit": |0><0|
+#   - "ground_qudit": |0><0| in ancilla_dim dimensions
+# ancilla_dim: Ancilla Hilbert-space dimension (default: 2; ground_qudit defaults to 4)
 #
 # seed: Random seed for reproducibility (default: 42)
 #
@@ -54,6 +56,7 @@ starting_state  = "thermal"
 recovery_type   = "codespace"
 collision_unitary = "jc"
 ancilla_state   = "ground_qubit"
+ancilla_dim     = 2
 ancilla_alpha   = 0.5
 # seed            = 7697
 seed            = 1214

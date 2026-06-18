@@ -65,6 +65,7 @@ struct RecoveryConfig
     rng::AbstractRNG
     dt::Float64
     ancilla_alpha::Float64
+    ancilla_dim::Int
     ancilla_state_name::String
     collision_unitary_name::String
     ancilla_state::Matrix{ComplexF64}
@@ -92,6 +93,7 @@ function RecoveryConfig(
     dt::Float64,
     ancilla_alpha::Float64;
     ancilla_state_name::String="thermal_qubit",
+    ancilla_dim::Int=default_ancilla_dim(ancilla_state_name),
     collision_unitary_name::String="swap",
     correlated_noise::Bool=false,
     plots_options::Dict{Symbol,Any}=Dict{Symbol,Any}(),
@@ -100,7 +102,7 @@ function RecoveryConfig(
     codespace_projection::String="auto",
     pin::Bool=false
 )
-    ancilla_state = make_ancilla_state(ancilla_state_name, ancilla_alpha)
+    ancilla_state = make_ancilla_state(ancilla_state_name, ancilla_alpha, ancilla_dim)
     collision_unitary = make_collision_unitary(
         collision_unitary_name,
         2^n_qubits,
@@ -109,7 +111,7 @@ function RecoveryConfig(
 
     return RecoveryConfig(
         name, experiment_dir, sigma, sigma_mixture, recovery_type, real_noise,
-        n_qubits, n_timesteps, n_states, seed, rng, dt, ancilla_alpha,
+        n_qubits, n_timesteps, n_states, seed, rng, dt, ancilla_alpha, ancilla_dim,
         ancilla_state_name, collision_unitary_name, ancilla_state, collision_unitary,
         correlated_noise, plots_options, isnothing(noise_options) ? NoiseObj[real_noise] : noise_options,
         real_noise_idx, codespace_projection, pin
@@ -171,12 +173,20 @@ end
 # Helper function to create RNG from seed, allowing for reproducibility or randomness
 make_rng(seed) = seed == -1 ? Random.default_rng() : Xoshiro(seed)
 
-function make_ancilla_state(kind::String, alpha::Float64)::Matrix{ComplexF64}
+default_ancilla_dim(kind::String)::Int = kind == "ground_qudit" ? 4 : 2
+
+function make_ancilla_state(kind::String, alpha::Float64, dim::Int=default_ancilla_dim(kind))::Matrix{ComplexF64}
+    dim >= 2 || throw(ArgumentError("ancilla_dim must be at least 2"))
     if kind == "thermal_qubit"
+        dim == 2 || throw(ArgumentError("thermal_qubit requires ancilla_dim = 2"))
         return Matrix{ComplexF64}(ancilla_thermal_qubit(alpha; T=ComplexF64))
     elseif kind == "ground_qubit"
+        dim == 2 || throw(ArgumentError("ground_qubit requires ancilla_dim = 2; use ground_qudit for larger ancillae"))
         return Matrix{ComplexF64}(ancilla_ground_state(ComplexF64, 2))
+    elseif kind == "ground_qudit"
+        return Matrix{ComplexF64}(ancilla_ground_state(ComplexF64, dim))
     elseif kind == "mixture"
+        dim == 2 || throw(ArgumentError("mixture requires ancilla_dim = 2"))
         η = [[alpha 0]; [0 1 - alpha]]
         return Matrix{ComplexF64}(η)
     else
@@ -189,6 +199,7 @@ function make_collision_unitary(kind::String, ds::Int, da::Int)::Matrix{ComplexF
     if kind == "swap"
         return _swap_unitary(ds, da)
     elseif kind == "jc"
+        da == 2 || throw(ArgumentError("collision_unitary = \"jc\" requires ancilla_dim = 2"))
         n_qubits = Int(log2(ds))
         return _n_qubit_exchange_unitary(n_qubits)
     else
@@ -204,6 +215,7 @@ function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
     dt = get(cfg, "dt", 0.1)
     anc_alpha = get(cfg, "ancilla_alpha", 0.8)
     anc_type = get(cfg, "ancilla_state", "thermal_qubit")
+    ancilla_dim = get(cfg, "ancilla_dim", default_ancilla_dim(anc_type))
     collision_type = get(cfg, "collision_unitary", "swap")
     n_timesteps = get(cfg, "n_timesteps", 10)
     n_states = get(cfg, "n_states", 1)
@@ -237,13 +249,15 @@ function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
     return RecoveryConfig(
         name, experiment_dir, sigma, sigma_mixture, recovery_type, real_noise,
         n_qubits, n_timesteps, n_states, seed, rng, dt, anc_alpha;
+        ancilla_dim=ancilla_dim,
         ancilla_state_name=anc_type,
         collision_unitary_name=collision_type,
         correlated_noise=correlated_noise,
         plots_options=plots_options,
         noise_options=noise_options,
         real_noise_idx=real_noise_idx,
-        codespace_projection=codespace_projection
+        codespace_projection=codespace_projection,
+        pin=pin
     )
 end
 
@@ -358,7 +372,7 @@ function make_initial_state_and_reference(cfg::RecoveryConfig)
         radius = sqrt(rand() * max_x)
         x = radius * exp(2π * im * rand())
         ρ = if cfg.recovery_type == "codespace"
-            codespace_dm(cfg.n_qubits, p, x)
+            codespace_dm(cfg.n_qubits, cfg.rng)
         else
             single_excitation_dm(cfg.n_qubits, p, x)
         end
