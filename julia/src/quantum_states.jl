@@ -12,10 +12,10 @@ function rand_unitary_haar(N::Int, rng)
     else
         Z = randn(ComplexF64, N, N) / sqrt(2.0)
     end
-    
+
     # 2. Perform QR decomposition
     Q, R = qr(Z)
-    
+
     # 3. Correct the phases of the diagonal of R to ensure strict Haar distribution
     # (The standard QR is unique only up to phases; this fixes the gauge)
     d = diag(R)
@@ -33,21 +33,21 @@ function rand_state_with_spectrum(spectrum::Vector{<:Number}; rng=nothing)
     # Ensure the spectrum is normalized
     spectrum = abs.(spectrum) / sum(abs.(spectrum))
     N = length(spectrum)
-    
+
     # Generate the random basis change
     U = rand_unitary_haar(N, rng)
-    
+
     # Construct the matrix: rho = U * Λ * U†
     # We use Diagonal for efficiency
     Lambda = Diagonal(spectrum)
-    
+
     state = U * Lambda * U'
     for i in eachindex(state)
-        re = abs(real(state[i])) > 1e-8 ? real(state[i]) : 0.0 
-        img = abs(imag(state[i])) > 1e-8 ? imag(state[i]) : 0.0 
-        state[i] = re + im*img
+        re = abs(real(state[i])) > 1e-8 ? real(state[i]) : 0.0
+        img = abs(imag(state[i])) > 1e-8 ? imag(state[i]) : 0.0
+        state[i] = re + im * img
     end
-    return state 
+    return state
 end
 
 
@@ -76,13 +76,37 @@ function thermal_state(n, beta)
     q = zeros(ComplexF64, 2^n, 2^n)
     for i in 1:n
         for j in 1:i-1
-            σz_i = foldl(kron, [k == i ? σz : I2 for k in 1:n])
-            σz_j = foldl(kron, [k == j ? σz : I2 for k in 1:n])
+            σz_i = foldl(kron, [k == i ? σz : I(2) for k in 1:n])
+            σz_j = foldl(kron, [k == j ? σz : I(2) for k in 1:n])
             q += σz_i * σz_j
         end
     end
     return exp(beta * q) / tr(exp(beta * q))
+end
+function site_operator(op, site, n)
+    id = Matrix{ComplexF64}(I, 2, 2)
+    ops = [k == site ? op : id for k in 1:n]
+    return foldl(kron, ops)
+end
 
+function thermal_state_hopping(n, beta; g=1 / n)
+    σp = ComplexF64[0 1; 0 0]
+    σm = ComplexF64[0 0; 1 0]
+
+    dim = 2^n
+    H = zeros(ComplexF64, dim, dim)
+
+    σp_ops = [site_operator(σp, i, n) for i in 1:n]
+    σm_ops = [site_operator(σm, i, n) for i in 1:n]
+
+    for i in 1:n-1
+        for j in i+1:n
+            H += g * (σp_ops[i] * σm_ops[j] + σp_ops[j] * σm_ops[i])
+        end
+    end
+
+    ρ = exp(-beta * H)
+    return ρ / tr(ρ)
 end
 
 """
@@ -94,41 +118,83 @@ function input_state(n, a, b)
     # Ground and excited states of one qubit
     g0 = [0.0 + 0.0im; 1.0]
     e1 = [1.0 + 0.0im; 0.0]
-    
+
     ground = foldl(kron, [g0 for _ in 1:n])
     excited = foldl(kron, [e1 for _ in 1:n])
     state = normalize(a * ground + b * excited)
     return state
 end
 
-"""
-    codespace_state(n_qubits, a, b)
+function _normalize_state(psi::Vector{ComplexF64})
+    norm(psi) > 0 || throw(ArgumentError("state amplitudes cannot all be zero"))
+    return normalize(psi)
+end
 
-Create a logic qubit a|00...0> + b|11...1>,
-where we adopt the convention that |00...0> is at index 1
-of the 2^n_qubits state vector and |11...1> is at index 2^n_qubits
+function _random_codespace_amplitudes(rng::AbstractRNG)
+    p = rand(rng)
+    phase = 2π * rand(rng)
+    return sqrt(p), sqrt(1 - p) * exp(-im * phase)
+end
+
 """
-function codespace_state(n_qubits, a, b, c, d)
+    codespace_state(n_qubits, alpha0, alpha1)
+    codespace_state(n_qubits, rng)
+
+Create a logic qubit `alpha0|00...0> + alpha1|11...1>`, where
+`|00...0>` is at index 1 and `|11...1>` is at index `2^n_qubits`.
+When an RNG is provided instead of amplitudes, the normalized amplitudes
+are sampled randomly.
+"""
+function codespace_state(n_qubits, alpha0, alpha1)
     psi = zeros(ComplexF64, 2^n_qubits)
-    psi[1] = a
-    psi[2] = c
-    psi[4] = d
-    psi[end] = b
-    psi = normalize(psi)
+    psi[1] = alpha0
+    psi[end] = alpha1
+    return _normalize_state(psi)
+end
+
+function codespace_state(n_qubits, rng::AbstractRNG)
+    alpha0, alpha1 = _random_codespace_amplitudes(rng)
+    return codespace_state(n_qubits, alpha0, alpha1)
+end
+
+"""
+    single_excitation_state(n_qubits, alpha0, alpha1)
+    single_excitation_state(n_qubits, rng)
+
+Create a state in the kernel of the all-to-all hopping Hamiltonian
+"""
+function single_excitation_state(n_qubits, alpha0, alpha1)
+    n_qubits != 2 &&
+        throw(ArgumentError("The parameter `codespace_xy` is implemented only for `n_qubits=2`."))
+    psi = zeros(ComplexF64, 2^n_qubits)
+    psi[2] = alpha0
+    psi[3] = alpha1
+    return _normalize_state(psi)
+end
+
+function single_excitation_state(n_qubits, rng::AbstractRNG)
+    alpha0, alpha1 = _random_codespace_amplitudes(rng)
+    return single_excitation_state(n_qubits, alpha0, alpha1)
+end
+
+function codespace_dm(n_qubits, alpha0, alpha1)
+    psi = codespace_state(n_qubits, alpha0, alpha1)
     return psi * psi'
 end
 
-function codespace_dm(n_qubits, p, x)
-    dim = 2^n_qubits
+function codespace_dm(n_qubits, rng::AbstractRNG)
+    psi = codespace_state(n_qubits, rng)
+    return psi * psi'
+end
 
-    rho = zeros(ComplexF64, dim, dim)
+function single_excitation_dm(n_qubits, alpha0, alpha1)
+    psi = single_excitation_state(n_qubits, alpha0, alpha1)
+    return psi * psi'
+end
 
-    rho[1, 1] = p
-    rho[end, end] = 1 - p
-    rho[1, dim] = x
-    rho[dim, 1] = conj(x)
-
-    return rho
+function single_excitation_dm(n_qubits, rng::AbstractRNG)
+    psi = single_excitation_state(n_qubits, rng)
+    return psi * psi'
 end
 
 """

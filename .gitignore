@@ -5,6 +5,8 @@ config_bb84.toml
 experiments/
 logs/
 
+notebooks/*.jl
+
 # ============================================ #
 # Python defaults
 

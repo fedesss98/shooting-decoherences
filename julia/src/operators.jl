@@ -1,67 +1,133 @@
-const I2 = [1.0+0.0im 0.0; 0.0 1.0]
-const Z  = [1.0+0.0im 0.0; 0.0 -1.0]
-const X  = [0.0im 1.0; 1.0 0.0]
 
+const I2 = ComplexF64[1.0+0.0im 0.0; 0.0 1.0]
+const Z  = ComplexF64[1.0+0.0im 0.0; 0.0 -1.0]
+const X  = ComplexF64[0.0im 1.0; 1.0 0.0]
+const Y  = ComplexF64[0.0 -im; im 0.0]
 
 """
-    kraus_depolarizing(p::Float64)
-
-Returns Kraus operators for the depolarizing channel.
-See for example
-    https://www.preskill.caltech.edu/ph219/chap3_15.pdf#page=24.11
+    tensor_power(A, n)
+Returns the n-fold tensor product of A with itself, i.e. A ⊗ A ⊗ ... ⊗ A (n times).
 """
-function get_depolarizing_operators(gamma, t)
-    p = 1 - exp(-gamma * t)
-    # Probability of no error
-    p_i = 1 - p
-    # Probability of each specific Pauli error (X, Y, Z)
-    p_err = p / 3.0
-    
-    K0 = sqrt(p_i) * [1.0 0.0; 0.0 1.0]
-    K1 = sqrt(p_err) * [0.0 1.0; 1.0 0.0]        # X
-    K2 = sqrt(p_err) * [0.0 -im; im 0.0]         # Y
-    K3 = sqrt(p_err) * [1.0 0.0; 0.0 -1.0]       # Z
-    
+function tensor_power(A, n::Int)
+    @assert n ≥ 1
+    return foldl(kron, [A for _ in 1:n])
+end
+
+
+function random_complex_matrix(rng, n, m)
+    return (randn(rng, n, m) .+ im .* randn(rng, n, m)) ./ sqrt(2)
+end
+
+function invsqrt_hermitian(A)
+    F = eigen(Hermitian(A))
+
+    vals = F.values
+    vecs = F.vectors
+
+    return vecs * Diagonal(1 ./ sqrt.(vals)) * vecs'
+end
+
+
+function get_pin_operators(rho_target; tol=1e-12)
+    d = size(rho_target, 1)
+
+    # diagonalize target density matrix
+    F = eigen(Hermitian(rho_target))
+    q = real.(F.values)
+    Phi = F.vectors
+
+    Ks = Matrix{ComplexF64}[]
+
+    for j in 1:d
+        if q[j] > tol
+            phi_j = Phi[:, j]
+
+            for i in 1:d
+                e_i = zeros(ComplexF64, d)
+                e_i[i] = 1.0
+
+                K = sqrt(q[j]) * phi_j * e_i'
+                push!(Ks, K)
+            end
+        end
+    end
+
+    return Ks
+end
+
+"""
+    get_depolarizing_operators(gamma, t; n_qubits=1)
+
+Returns Kraus operators for a global/correlated depolarizing-like Pauli channel.
+
+For n_qubits = 1, this is the usual single-qubit depolarizing channel.
+
+For n_qubits > 1, this describes fully correlated Pauli noise:
+    with probability 1-p: no error
+    with probability p/3: X⊗X⊗...⊗X
+    with probability p/3: Y⊗Y⊗...⊗Y
+    with probability p/3: Z⊗Z⊗...⊗Z
+"""
+function get_depolarizing_operators(gamma, t; n_qubits=1)
+    p = 1.0 - exp(-gamma * t)
+
+    K0 = sqrt(1.0 - p) * tensor_power(I2, n_qubits)
+    K1 = sqrt(p / 3.0) * tensor_power(X, n_qubits)
+    K2 = sqrt(p / 3.0) * tensor_power(Y, n_qubits)
+    K3 = sqrt(p / 3.0) * tensor_power(Z, n_qubits)
+
     return [K0, K1, K2, K3]
 end
 
 
 """
-    get_amplitudedamping_operators(gamma, t)
-See for example
-    https://www.preskill.caltech.edu/ph219/chap3_15.pdf#page=24.11
-    https://docs.pennylane.ai/en/stable/code/api/pennylane.AmplitudeDamping.html
+    get_amplitudedamping_operators(gamma, t; n_qubits=1)
+
+Returns Kraus operators for a global/correlated amplitude damping channel.
+
+For n_qubits = 1, this is the usual amplitude damping channel.
+
+For n_qubits > 1, this implements collective decay:
+    |11...1⟩ → |00...0⟩
+
+This is one possible correlated amplitude damping model, not the only one.
 """
-function get_amplitudedamping_operators(gamma, t)
-    e = exp(-gamma*t)
-    k1 = [
-        1 0;
-        0 sqrt(e)
-    ]
-    k2 = [
-        0 sqrt(1-e)
-        0 0
-    ]
-    return [k1, k2]
+function get_amplitudedamping_operators(gamma, t; n_qubits=1)
+    e = exp(-gamma * t)
+
+    dim = 2^n_qubits
+
+    K0 = Matrix{ComplexF64}(I, dim, dim)
+    K0[dim, dim] = sqrt(e)
+
+    K1 = zeros(ComplexF64, dim, dim)
+    K1[1, dim] = sqrt(1.0 - e)
+
+    return [K0, K1]
 end
 
 """
-    get_phasedamping_operators(gamma, t)
-See for example
-    https://www.preskill.caltech.edu/ph219/chap3_15.pdf#page=24.11
-    https://docs.pennylane.ai/en/stable/code/api/pennylane.PhaseDamping.html
+    get_phasedamping_operators(gamma, t; n_qubits=1)
+
+Returns Kraus operators for a global/correlated phase damping channel.
+
+For n_qubits = 1, this is the usual phase damping channel.
+
+For n_qubits > 1, this damps coherences involving |11...1⟩ collectively.
+This is one possible correlated phase damping model, not the only one.
 """
-function get_phasedamping_operators(gamma, t)
-    e = exp(-gamma*t)
-    k1 = [
-        1 0;
-        0 sqrt(e)
-    ]
-    k2 = [
-        0 0
-        0 sqrt(1-e)
-    ]
-    return [k1, k2]
+function get_phasedamping_operators(gamma, t; n_qubits=1)
+    e = exp(-gamma * t)
+
+    dim = 2^n_qubits
+
+    K0 = Matrix{ComplexF64}(I, dim, dim)
+    K0[dim, dim] = sqrt(e)
+
+    K1 = zeros(ComplexF64, dim, dim)
+    K1[dim, dim] = sqrt(1.0 - e)
+
+    return [K0, K1]
 end
 
 """
@@ -69,13 +135,66 @@ end
 See for example
     https://docs.pennylane.ai/en/stable/code/api/pennylane.BitFlip.html
 """
-function get_bitflip_operators(gamma, t)
-    p = (1.0 - exp(-gamma*t)) / 2.0
+function get_bitflip_operators(gamma, t; n_qubits=1)
+    p = (1.0 - exp(-gamma*t))
 
-    k1 = sqrt(1.0 - p) * I2
-    k2 = sqrt(p) * X
-    
-    return [k1, k2]
+    K_no_flip = sqrt(1.0 - p) * foldl(kron, [I2 for _ in 1:n_qubits])
+    K_all_flip = sqrt(p) * foldl(kron, [X for _ in 1:n_qubits])
+
+    return [K_no_flip, K_all_flip]
+end
+
+
+
+function normalize_kraus_operators(kraus; tol=1e-12)
+    dim = size(kraus[1], 1)
+    S = zeros(ComplexF64, dim, dim)
+
+    for K in kraus
+        size(K) == (dim, dim) ||
+            throw(ArgumentError("All Kraus operators must have size $dim × $dim"))
+        S += K' * K
+    end
+
+    F = eigen(Hermitian(S))
+    vals = real.(F.values)
+    if any(vals .<= tol)
+        throw(ArgumentError("Kraus normalization matrix is singular or ill-conditioned"))
+    end
+
+    S_inv_half = F.vectors * Diagonal(1 ./ sqrt.(vals)) * F.vectors'
+    return [Matrix{ComplexF64}(K) * S_inv_half for K in kraus]
+end
+
+"""
+    correlate_kraus_operators(kraus, n_qubits)
+
+Build a correlated full-system channel from one-qubit Kraus operators by using
+the same Kraus label on every qubit, then renormalizing the full-system Kraus
+list so that Σᵢ Kᵢ†Kᵢ = I.
+"""
+function correlate_kraus_operators(kraus, n_qubits::Int)
+    n_qubits >= 1 || throw(ArgumentError("n_qubits must be at least 1"))
+    n_qubits == 1 && return [Matrix{ComplexF64}(K) for K in kraus]
+
+    all(size(K) == (2, 2) for K in kraus) ||
+        throw(ArgumentError("correlated Kraus construction expects one-qubit operators"))
+
+    raw_correlated = [tensor_power(K, n_qubits) for K in kraus]
+    return normalize_kraus_operators(raw_correlated)
+end
+
+"""
+    get_random_operators(seed; n_qubits=1)
+Generate a set of 2 * 2^n_qubits random operators (matrices),
+then normalize them so that their Σᵢ Kᵢ†Kᵢ = 1
+`rng`: seeded random number generator for reproducible results
+"""
+function get_random_operators(rng::AbstractRNG; n_qubits=1)
+    n_kraus = 2 * 2^n_qubits
+    As = [random_complex_matrix(rng, 2^n_qubits, 2^n_qubits) for _ in 1:n_kraus]
+
+    return normalize_kraus_operators(As)
 end
 
 """
@@ -86,24 +205,55 @@ function apply_channel(kraus, ρ)
 end
 
 """
+    expand_kraus_operators(kraus, n_qubits, correlated)
+
+Return Kraus operators acting on the full n-qubit system. Single-qubit
+operators are expanded as independent tensor-product noises on every qubit.
+Operators already acting on the full system are returned unchanged.
+"""
+function expand_kraus_operators(kraus, n_qubits::Int)
+    target_dim = 2^n_qubits
+    op_dim = size(kraus[1], 1)
+
+    all(size(K) == (op_dim, op_dim) for K in kraus) ||
+        throw(ArgumentError("All Kraus operators must have the same square dimension"))
+
+    if op_dim == target_dim
+        return [Matrix{ComplexF64}(K) for K in kraus]
+    elseif op_dim != 2
+        throw(ArgumentError("Kraus operators have dimension $op_dim, expected 2 or $target_dim"))
+    end
+
+    expanded = Matrix{ComplexF64}[]
+    for idx in Iterators.product([eachindex(kraus) for _ in 1:n_qubits]...)
+        K = Matrix{ComplexF64}(kraus[idx[1]])
+        for i in 2:n_qubits
+            K = kron(K, kraus[idx[i]])
+        end
+        push!(expanded, K)
+    end
+
+    return expanded
+end
+
+"""
     apply_channel(kraus, ρ, n_qubits; extra_dims=0)
 Applies the amplitude damping channel for all n qubits in the system sequentially.
 Optionally acts as the identity in the last subspace with dimentions `extra_dims`.
 """
-function apply_channel(kraus, ρ, n_qubits::Int; extra_dims::Int=0)
+function apply_channel(kraus, ρ, n_subsystems::Int; susbsystem_dim::Int=2, extra_dims::Int=0)
     ρi = copy(ρ)
     
-    if n_qubits == 1
-        return apply_channel(kraus, ρ)
-    end
+    Isubsys = Matrix{ComplexF64}(I, susbsystem_dim, susbsystem_dim)
+    Iextradims = Matrix{ComplexF64}(I, extra_dims, extra_dims)
 
-    for qubit in 1:n_qubits
-        ρf = zeros(ComplexF64, size(ρ))
+    for subsystem in 1:n_subsystems
+        ρf = zero(ρi)
         for k in kraus
             # Extend the Kraus operator
-            op_list = [i == qubit ? k : I(2) for i in 1:n_qubits]
+            op_list = [i == subsystem ? k : Isubsys for i in 1:n_subsystems]
             if extra_dims > 0
-              push!(op_list, I(extra_dims))
+              push!(op_list, Iextradims)
             end
             k_full = foldl(kron, op_list)
 
@@ -117,10 +267,12 @@ function apply_channel(kraus, ρ, n_qubits::Int; extra_dims::Int=0)
 end
 
 """
-    apply_extended_channel(ρ, kraus, origin_dim)
+    apply_extended_channel(ρ, kraus; dim_to_extend)
 """
-function apply_extended_channel(ρ, kraus, origin_dim)
-    dim_to_extend = size(ρ, 1) ÷ origin_dim
+function apply_extended_channel(ρ, kraus; dim_to_extend=0)
+    if dim_to_extend == 0
+        return apply_channel(kraus, ρ)
+    end
     kraus_extended = [kron(k, I(dim_to_extend)) for k in kraus]
     return sum([k*ρ*k' for k in kraus_extended])
 end

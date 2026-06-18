@@ -43,34 +43,34 @@
 # pin: Whether collapse_map should use pinned collapse operators (default: false)
 #
 
+[iterate]
+base_name       = "20261706_rand_rand_"
+n_qubits        = [2, 3, 4]
+beta            = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5]
 
-name            = "test_projection"
-n_qubits        = 1
-beta            = 2.5
+[settings]
 dt              = 0.031415926
-n_timesteps     = 30
-n_states        = 1
+n_timesteps     = 5
+n_states        = 100
 starting_state  = "thermal"
 recovery_type   = "codespace"
-codespace_projection = "auto"
-pin             = true
-sigma_mixture   = 0.5
 collision_unitary = "jc"
 ancilla_state   = "ground_qubit"
 ancilla_dim     = 2
 ancilla_alpha   = 0.5
 # seed            = 7697
-seed            = 643121
+seed            = 1214
 noise_options = [
-    [0.5, "amplitude_damping", 3.0],
-    [0.5, "bitflip", 3.0],
+    [0.5, "general", 20.0],
+    [0.5, "general", 20.0],
 ]
-real_noise = "bitflip"
-correlated_noise = false
+real_noise = "general"
+
+correlated_noise = false 
 # pin = false
 
 [plots]
-ylims       = [0.01, 1.01]
-# xlims       = [0.0, 10.0]
+ylims       = [0.35, 1.1]
+xlims       = [0.0, 30.0]
 choices     = true
 plot_title = "codespace_recovery_avg"

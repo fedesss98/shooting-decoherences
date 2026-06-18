@@ -2,9 +2,10 @@ module DecoKiller
 
 using ProgressMeter
 using JSON
+using JLD2
 using Dates
 
-export run_experiment
+export run_experiment, iterate_recovery!
 
 # Core primitives and lower-level modules.
 include("PetzMaps.jl")
@@ -30,18 +31,21 @@ function reset_initial_state!(state::RecoveryState, cfg::RecoveryConfig)
         state.ρ0 .= ρ0
         state.ρ_free .= ρ0
         state.ρ_rec .= ρ0
-    elseif cfg.recovery_type == "codespace"
+        state.ρ_codespace0 .= ρ0
+    elseif cfg.recovery_type == "codespace" || cfg.recovery_type == "codespace_xy"
         sigma = cfg.sigma
-        p = rand(cfg.rng)
-        max_x = p * (1-p)  # Maximum allowed magnitude for |x|^2
-        radius = sqrt(rand(cfg.rng) * max_x)
-        x = radius * exp(2π * im * rand(cfg.rng))
-        ρ = codespace_dm(cfg.n_qubits, p, x)
-        ρ0 = ρ + sigma
+        ρ = if cfg.recovery_type == "codespace"
+            codespace_dm(cfg.n_qubits, cfg.rng)
+        else
+            single_excitation_dm(cfg.n_qubits, cfg.rng)
+        end
+        r = cfg.sigma_mixture
+        ρ0 = (1 - r) * ρ + r * sigma
         ρ0 = ρ0 / tr(ρ0)  # Normalize to ensure it's a valid density matrix
         state.ρ0 .= ρ0
         state.ρ_free .= ρ0
         state.ρ_rec .= ρ0
+        state.ρ_codespace0 .= ρ
     elseif cfg.recovery_type == "inputstate"
         a, b = rand(cfg.rng, 2)
         ψ0 = input_state(cfg.n_qubits, a, b)
@@ -49,6 +53,7 @@ function reset_initial_state!(state::RecoveryState, cfg::RecoveryConfig)
         state.ρ0 .= ρ0
         state.ρ_free .= ρ0
         state.ρ_rec .= ρ0
+        state.ρ_codespace0 .= ρ0
     end
 end
 
@@ -73,29 +78,38 @@ function _run_single_state!(cfg::RecoveryConfig, state::RecoveryState, logs::Rec
 end
 
 
-function _plot_and_save_results(cfg::RecoveryConfig, state::RecoveryState, logs::RecoveryLogs, avg_fidelities)
+function _plot_and_save_results(cfg::RecoveryConfig, state::RecoveryState, logs::RecoveryLogs, avg_fidelities=nothing)
     save_results!(cfg, state, logs, avg_fidelities)
-    plot_autorecovery(state, cfg, logs; show=false, save=true, xlims=[0, cfg.n_timesteps])
-    plot_average_fidelity(avg_fidelities[2], avg_fidelities[1], state, cfg; show=false, save=true)
+    if cfg.n_states == 1
+        plot_autorecovery(state, cfg, logs; show=false, save=true, cfg.plots_options...)
+    else
+        plot_average_fidelity(
+            avg_fidelities[2], avg_fidelities[1], state, cfg;
+            show=false, save=true, cfg.plots_options...)
+    end
     return nothing
 end
 
 
-function run_experiment(config_file="./configs/config.toml")
-    cfg, state, logs = load_configuration(config_file)
+function run_experiment(config_file="./configs/config.toml"; debug::Bool=false)
+    cfg, state, logs = load_configuration(config_file; debug=debug)
 
     ref_fidelities = zeros(Float64, cfg.n_timesteps)
     fidelities = zeros(Float64, cfg.n_timesteps)
 
-    p_states = Progress(cfg.n_states, desc="Adaptive Recovery ")
-    for s in 1:cfg.n_states
-        start_idx, end_idx = _run_single_state!(cfg, state, logs, s)
-        ref_fidelities .+= logs.ref_fidelities[start_idx:end_idx]
-        fidelities .+= logs.fidelities[start_idx:end_idx]
-        next!(p_states)
+    if cfg.n_states == 1
+        start_idx, end_idx = _run_single_state!(cfg, state, logs, 1)
+        avg_fidelities = [nothing, nothing]
+    else
+        p_states = Progress(cfg.n_states, desc="Adaptive Recovery ")
+        for s in 1:cfg.n_states
+            start_idx, end_idx = _run_single_state!(cfg, state, logs, s)
+            ref_fidelities .+= logs.ref_fidelities[start_idx:end_idx]
+            fidelities .+= logs.fidelities[start_idx:end_idx]
+            next!(p_states)
+        end
+        avg_fidelities = (ref_fidelities ./ cfg.n_states, fidelities ./ cfg.n_states)
     end
-    avg_fidelities = (ref_fidelities ./ cfg.n_states, fidelities ./ cfg.n_states)
-
     _plot_and_save_results(cfg, state, logs, avg_fidelities)
 
     return cfg, state, logs, avg_fidelities
@@ -107,6 +121,8 @@ function _serialize_maps(logs::RecoveryLogs)
             "Nx" => vec(real(m.Nx)),
             "N1" => vec(real(m.N1)),
             "N2" => vec(real(m.N2)),
+            "Cx" => vec(real(m.Cx)),
+            "Xi" => vec(real(m.Xi)),
             "P" => vec(real(m.P)),
             "dim" => size(m.Nx)
         ) for m in logs.maps
@@ -114,7 +130,7 @@ function _serialize_maps(logs::RecoveryLogs)
 end
 
 function save_results!(cfg::RecoveryConfig, state::RecoveryState, logs::RecoveryLogs, avg_fidelities)
-    out_file = joinpath(cfg.experiment_dir, "data", "results.json")
+    meta_file = joinpath(cfg.experiment_dir, "data", "meta.json")
     payload = Dict(
         "timestamp" => string(now()),
         "experiment" => cfg.name,
@@ -123,21 +139,46 @@ function save_results!(cfg::RecoveryConfig, state::RecoveryState, logs::Recovery
         "n_states" => cfg.n_states,
         "seed" => cfg.seed,
         "real_noise" => cfg.real_noise.name,
+        "real_noise_idx" => cfg.real_noise_idx,
         "noise_options" => [n.name for n in state.noise_options],
+        "codespace_projection" => cfg.codespace_projection,
+        "pin" => cfg.pin,
+        "ancilla_dim" => cfg.ancilla_dim,
+    )
+
+    open(meta_file, "w") do io
+        JSON.print(io, payload, 2)
+    end
+
+    matrices_file = joinpath(cfg.experiment_dir, "data", "superoperators.jld2")
+    payload = Dict(
+        "real_noise_kraus" => cfg.real_noise.extended_kraus,
+        "real_noise_idx" => cfg.real_noise_idx,
+        "noise_options_kraus" => [n.extended_kraus for n in state.noise_options],
+        "ancilla_state" => cfg.ancilla_state_name,
+        "ancilla_dim" => cfg.ancilla_dim,
+        "collision_unitary" => cfg.collision_unitary_name,
+        "maps" => _serialize_maps(logs)
+    )
+    JLD2.save(matrices_file, payload)
+
+    results_file = joinpath(cfg.experiment_dir, "data", "results.json")
+    payload = Dict(
         "fidelities" => logs.fidelities,
         "ref_fidelities" => logs.ref_fidelities,
+        "avg_ref_fidelities" => avg_fidelities[1],
+        "avg_fidelities" => avg_fidelities[2],
+        "codespace_overlaps" => logs.codespace_overlaps,
         "choice_history" => logs.choice_history,
         "choice_c1" => state.choice.c1,
         "choice_c2" => state.choice.c2,
-        "avg_ref_fidelities" => avg_fidelities[1],
-        "avg_fidelities" => avg_fidelities[2],
-        "maps" => _serialize_maps(logs)
     )
 
-    open(out_file, "w") do io
+    open(results_file, "w") do io
         JSON.print(io, payload, 2)
     end
-    return out_file
+
+    return results_file
 end
 
 
