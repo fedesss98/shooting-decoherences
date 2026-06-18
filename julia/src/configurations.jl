@@ -216,7 +216,7 @@ function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
     anc_alpha = get(cfg, "ancilla_alpha", 0.8)
     anc_type = get(cfg, "ancilla_state", "thermal_qubit")
     ancilla_dim = get(cfg, "ancilla_dim", default_ancilla_dim(anc_type))
-    collision_type = get(cfg, "collision_unitary", "swap")
+    collision_type = get(cfg, "coll_unitary", "swap")
     n_timesteps = get(cfg, "n_timesteps", 10)
     n_states = get(cfg, "n_states", 1)
     seed = get(cfg, "seed", 42)
@@ -224,7 +224,7 @@ function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
     starting_state = get(cfg, "starting_state", "thermal")
     sigma_mixture = get(cfg, "sigma_mixture", 0.5)
     correlated_noise = get(cfg, "correlated_noise", false)
-    codespace_projection = get(cfg, "codespace_projection", "auto")
+    codespace_projection = get(cfg, "code_projection", "auto")
     pin = get(cfg, "pin", false)
     plots_options = Dict{Symbol,Any}(Symbol(k) => v for (k, v) in get(cfg, "plots", Dict{String,Any}()))
 

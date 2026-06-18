@@ -46,26 +46,26 @@
 
 name            = "test_projection"
 n_qubits        = 1
-beta            = 2.5
+beta            = 1.0
 dt              = 0.031415926
 n_timesteps     = 30
 n_states        = 1
 starting_state  = "thermal"
-recovery_type   = "codespace"
-codespace_projection = "auto"
+recovery_type   = "auto"
+code_projection = "none"
 pin             = true
 sigma_mixture   = 0.5
-collision_unitary = "jc"
+coll_unitary    = "jc"
 ancilla_state   = "ground_qubit"
 ancilla_dim     = 2
 ancilla_alpha   = 0.5
 # seed            = 7697
 seed            = 643121
 noise_options = [
-    [0.5, "amplitude_damping", 3.0],
-    [0.5, "bitflip", 3.0],
+    [0.5, "phase_damping", 20.0],
+    [0.5, "bitflip", 20.0],
 ]
-real_noise = "bitflip"
+real_noise = "phase_damping"
 correlated_noise = false
 # pin = false
 

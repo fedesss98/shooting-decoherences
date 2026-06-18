@@ -164,8 +164,6 @@ function iterate_recovery!(
     N2 = I(size(config.real_noise.supermap)[1])
   end
 
-  maps_to_log = (Nx=copy(Nx), N1=copy(N1), N2=copy(N2))
-
   ds = 2^config.n_qubits
 
   # ======================================
