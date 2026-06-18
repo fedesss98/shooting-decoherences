@@ -19,23 +19,21 @@
 # noise_options is expanded in-place as noise_N_prob / noise_N_name / noise_N_gamma.
 # =============================================================================
 
-# ── Activate the Julia project and load DecoKiller ────────────────────────────
-# Script is at  julia/scripts/run_iterations.jl
-# Project.toml is at  julia/Project.toml  →  one level up from @__DIR__
 const SCRIPT_DIR = @__DIR__
+const SCRIPT_IS_ENTRYPOINT = abspath(PROGRAM_FILE) == @__FILE__
 
-import Pkg
-Pkg.activate(joinpath(SCRIPT_DIR, ".."); io=devnull)   # silent activation
-
-include(joinpath("..", "src", "DecoKiller.jl"))
-using .DecoKiller                                        # exports run_experiment
+if SCRIPT_IS_ENTRYPOINT
+    import Pkg
+    Pkg.activate(joinpath(SCRIPT_DIR, ".."); io=devnull)
+    include(joinpath(SCRIPT_DIR, "..", "src", "DecoKiller.jl"))
+end
 using TOML
 
 # ── Project-level paths ───────────────────────────────────────────────────────
 const PROJECT_ROOT = normpath(joinpath(SCRIPT_DIR, "..", ".."))
 const CONFIG_ITER_PATH = joinpath(PROJECT_ROOT, "configs", "config_iter.toml")
 const EXPERIMENTS_DIR = joinpath(PROJECT_ROOT, "experiments")
-const SUMMARY_CSV = joinpath(EXPERIMENTS_DIR, "iterations_summary.csv")
+const SUMMARY_CSV_NAME = "iterations_summary.csv"
 
 # ── CSV column order: mirrors standard config.toml, [plots] excluded ──────────
 # noise_options is expanded at this position as noise_N_prob/name/gamma columns.
@@ -45,7 +43,7 @@ const CSV_FIELDS_PRE_NOISE = [
     "dt", "n_timesteps", "n_states",
     "starting_state", "recovery_type",
     "collision_unitary", "ancilla_state", "ancilla_dim", "ancilla_alpha",
-    "seed",
+    "seed", "sigma_mixture",
 ]
 const CSV_FIELDS_POST_NOISE = [
     "real_noise", "correlated_noise",
@@ -57,20 +55,112 @@ const CSV_FIELDS_POST_NOISE = [
 # =============================================================================
 
 function parse_cli_args(args::Vector{String})
-    config_path = CONFIG_ITER_PATH
-    debug = false
+    opts = Dict{String,Any}(
+        "config_path" => CONFIG_ITER_PATH,
+        "debug" => false,
+        "experiments_dir" => EXPERIMENTS_DIR,
+        "summary_csv" => nothing,
+    )
 
-    for arg in args
-        if arg == "--debug"
-            debug = true
+    i = 1
+    while i <= length(args)
+        arg = args[i]
+
+        if startswith(arg, "--") && occursin("=", arg)
+            key, value = split(arg, "="; limit=2)
+            apply_cli_option!(opts, key, value)
+        elseif startswith(arg, "--")
+            key = normalize_cli_key(arg)
+            if key == "debug"
+                apply_cli_option!(opts, key, nothing)
+            elseif key in ("config", "config_path", "experiments_dir", "summary_csv")
+                i == length(args) && error("Missing value for option: $arg")
+                i += 1
+                apply_cli_option!(opts, key, args[i])
+            else
+                error("Unknown flag: $arg")
+            end
+        elseif occursin("=", arg)
+            key, value = split(arg, "="; limit=2)
+            apply_cli_option!(opts, key, value)
         elseif startswith(arg, "-")
             error("Unknown flag: $arg")
         else
-            config_path = arg
+            opts["config_path"] = arg
+        end
+
+        i += 1
+    end
+
+    config_path = String(opts["config_path"])
+    debug = Bool(opts["debug"])
+    experiments_dir = String(opts["experiments_dir"])
+    summary_csv = isnothing(opts["summary_csv"]) ?
+        joinpath(experiments_dir, SUMMARY_CSV_NAME) :
+        String(opts["summary_csv"])
+
+    return config_path, debug, experiments_dir, summary_csv
+end
+
+function normalize_cli_key(key::AbstractString)::String
+    s = String(strip(key))
+    while startswith(s, "-")
+        s = s[2:end]
+    end
+    return replace(s, "-" => "_")
+end
+
+function parse_cli_bool(value::AbstractString)::Bool
+    v = lowercase(strip(value))
+    v in ("true", "t", "yes", "y", "1") && return true
+    v in ("false", "f", "no", "n", "0") && return false
+    throw(ArgumentError("Expected a boolean value, got: $value"))
+end
+
+function apply_cli_option!(opts::Dict{String,Any}, raw_key::AbstractString, value)
+    key = normalize_cli_key(raw_key)
+    if key in ("config", "config_path")
+        isnothing(value) && throw(ArgumentError("$raw_key requires a value"))
+        opts["config_path"] = value
+    elseif key == "debug"
+        opts["debug"] = isnothing(value) ? true : parse_cli_bool(value)
+    elseif key == "experiments_dir"
+        isnothing(value) && throw(ArgumentError("$raw_key requires a value"))
+        opts["experiments_dir"] = value
+    elseif key == "summary_csv"
+        isnothing(value) && throw(ArgumentError("$raw_key requires a value"))
+        opts["summary_csv"] = value
+    else
+        error("Unknown option: $raw_key")
+    end
+    return opts
+end
+
+function normalize_settings_aliases!(settings::Dict)
+    if haskey(settings, "coll_unitary")
+        if haskey(settings, "collision_unitary") && settings["collision_unitary"] != settings["coll_unitary"]
+            throw(ArgumentError("settings contains both collision_unitary and coll_unitary with different values"))
+        end
+        settings["collision_unitary"] = settings["coll_unitary"]
+        delete!(settings, "coll_unitary")
+    end
+    return settings
+end
+
+function run_iterator_experiment(config_path::AbstractString; debug::Bool=false)
+    if isdefined(@__MODULE__, :run_experiment)
+        return getfield(@__MODULE__, :run_experiment)(config_path; debug=debug)
+    elseif isdefined(@__MODULE__, :DecoKiller)
+        deco_killer = getfield(@__MODULE__, :DecoKiller)
+        if isdefined(deco_killer, :run_experiment)
+            return getfield(deco_killer, :run_experiment)(config_path; debug=debug)
         end
     end
 
-    return config_path, debug
+    throw(ArgumentError(
+        "run_experiment is not loaded. In the REPL, load DecoKiller before calling main, " *
+        "for example with `using DecoKiller` or by including DecoKiller/src/DecoKiller.jl."
+    ))
 end
 
 """
@@ -164,13 +254,14 @@ end
 # =============================================================================
 
 function main(args=ARGS)
-    mkpath(EXPERIMENTS_DIR)
-
     # ── 1. Load config_iter.toml ───────────────────────────────────────────────
-    config_path, debug = parse_cli_args(args)
+    config_path, debug, experiments_dir, summary_csv = parse_cli_args(args)
+    
+    mkpath(experiments_dir)
+    
     cfg = TOML.parsefile(config_path)
     iterate_cfg = cfg["iterate"]
-    settings_cfg = cfg["settings"]
+    settings_cfg = normalize_settings_aliases!(Dict{String,Any}(cfg["settings"]))
     plots_cfg = get(cfg, "plots", Dict{String,Any}())
 
     # ── 2. Separate base_name from the parameters to iterate over ─────────────
@@ -197,7 +288,7 @@ function main(args=ARGS)
         # 4a. Resolve folder name and paths
         suffix = combo_suffix(combo)
         folder_name = base_name * suffix
-        folder_path = joinpath(EXPERIMENTS_DIR, folder_name)
+        folder_path = joinpath(experiments_dir, folder_name)
         config_path = joinpath(folder_path, "config.toml")
         mkpath(folder_path)
 
@@ -209,6 +300,7 @@ function main(args=ARGS)
         flat_cfg = Dict{String,Any}("name" => folder_name)
         merge!(flat_cfg, combo)         # n_qubits, beta (and any extras)
         merge!(flat_cfg, settings_cfg)  # dt, n_timesteps, noise_options, …
+        flat_cfg["experiments_dir"] = experiments_dir
         isempty(plots_cfg) || (flat_cfg["plots"] = plots_cfg)
 
         open(config_path, "w") do io
@@ -221,7 +313,7 @@ function main(args=ARGS)
 
         avg_fidelities = (nothing, nothing)
         try
-            _, _, _, avg_fidelities = run_experiment(config_path)
+            _, _, _, avg_fidelities = run_iterator_experiment(config_path; debug=debug)
         catch err
             @warn "Error while running simulation" exception = (err, catch_backtrace())
             continue
@@ -245,11 +337,14 @@ function main(args=ARGS)
         end
         merge!(row, expand_noise_options(noise_opts))
 
-        append_csv_row(SUMMARY_CSV, row, col_order)
+        mkpath(dirname(summary_csv))
+        append_csv_row(summary_csv, row, col_order)
     end
 
     println("✓  All $(n_total) experiment(s) complete.")
-    println("   Summary → $SUMMARY_CSV")
+    println("   Summary → $summary_csv")
 end
 
-main()
+if SCRIPT_IS_ENTRYPOINT
+    main()
+end
