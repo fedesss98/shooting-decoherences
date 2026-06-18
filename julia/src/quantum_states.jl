@@ -125,66 +125,76 @@ function input_state(n, a, b)
     return state
 end
 
-"""
-    codespace_state(n_qubits, a, b)
+function _normalize_state(psi::Vector{ComplexF64})
+    norm(psi) > 0 || throw(ArgumentError("state amplitudes cannot all be zero"))
+    return normalize(psi)
+end
 
-Create a logic qubit a|00...0> + b|11...1>,
-where we adopt the convention that |00...0> is at index 1
-of the 2^n_qubits state vector and |11...1> is at index 2^n_qubits
-"""
-function codespace_state(n_qubits, a, b, c, d)
-    psi = zeros(ComplexF64, 2^n_qubits)
-    psi[1] = a
-    psi[2] = c
-    psi[4] = d
-    psi[end] = b
-    psi = normalize(psi)
-    return psi * psi'
+function _random_codespace_amplitudes(rng::AbstractRNG)
+    p = rand(rng)
+    phase = 2π * rand(rng)
+    return sqrt(p), sqrt(1 - p) * exp(-im * phase)
 end
 
 """
-    single_excitation_state(n_qubits, a, b)
+    codespace_state(n_qubits, alpha0, alpha1)
+    codespace_state(n_qubits, rng)
+
+Create a logic qubit `alpha0|00...0> + alpha1|11...1>`, where
+`|00...0>` is at index 1 and `|11...1>` is at index `2^n_qubits`.
+When an RNG is provided instead of amplitudes, the normalized amplitudes
+are sampled randomly.
+"""
+function codespace_state(n_qubits, alpha0, alpha1)
+    psi = zeros(ComplexF64, 2^n_qubits)
+    psi[1] = alpha0
+    psi[end] = alpha1
+    return _normalize_state(psi)
+end
+
+function codespace_state(n_qubits, rng::AbstractRNG)
+    alpha0, alpha1 = _random_codespace_amplitudes(rng)
+    return codespace_state(n_qubits, alpha0, alpha1)
+end
+
+"""
+    single_excitation_state(n_qubits, alpha0, alpha1)
+    single_excitation_state(n_qubits, rng)
 
 Create a state in the kernel of the all-to-all hopping Hamiltonian
 """
-function single_excitation_state(n_qubits, a, b)
-    n_qubits != 2 && throw(ArgumentError("The parameter `codespace_xy` is implemented only for `n_qubtis=2`."))
+function single_excitation_state(n_qubits, alpha0, alpha1)
+    n_qubits != 2 &&
+        throw(ArgumentError("The parameter `codespace_xy` is implemented only for `n_qubits=2`."))
     psi = zeros(ComplexF64, 2^n_qubits)
-    psi[2] = a
-    psi[3] = b
-    psi = normalize(psi)
+    psi[2] = alpha0
+    psi[3] = alpha1
+    return _normalize_state(psi)
+end
+
+function single_excitation_state(n_qubits, rng::AbstractRNG)
+    alpha0, alpha1 = _random_codespace_amplitudes(rng)
+    return single_excitation_state(n_qubits, alpha0, alpha1)
+end
+
+function codespace_dm(n_qubits, alpha0, alpha1)
+    psi = codespace_state(n_qubits, alpha0, alpha1)
     return psi * psi'
 end
 
-function codespace_dm(n_qubits, p, x)
-    dim = 2^n_qubits
-
-    rho = zeros(ComplexF64, dim, dim)
-
-    rho[1, 1] = p
-    rho[end, end] = 1 - p
-    rho[1, dim] = x
-    rho[dim, 1] = conj(x)
-
-    return rho
+function codespace_dm(n_qubits, rng::AbstractRNG)
+    psi = codespace_state(n_qubits, rng)
+    return psi * psi'
 end
 
-function single_excitation_dm(n_qubits, p, x)
-    n_qubits != 2 && throw(ArgumentError("The parameter `codespace_xy` is implemented only for `n_qubtis=2`."))
+function single_excitation_dm(n_qubits, alpha0, alpha1)
+    psi = single_excitation_state(n_qubits, alpha0, alpha1)
+    return psi * psi'
+end
 
-    0 <= p <= 1 || throw(ArgumentError("p must be in [0, 1]"))
-
-    abs2(x) <= p * (1 - p) + 1e-12 ||
-        throw(ArgumentError("Need |x|^2 ≤ p(1-p) for a valid density matrix"))
-
-    rho = zeros(ComplexF64, 4, 4)
-
-    rho[2, 2] = p
-    rho[3, 3] = 1 - p
-    rho[2, 3] = x
-    rho[3, 2] = conj(x)
-
-    return rho
+function single_excitation_dm(n_qubits, rng::AbstractRNG)
+    psi = single_excitation_state(n_qubits, rng)
+    return psi * psi'
 end
 
 """

@@ -286,7 +286,7 @@ function make_reference_state(kind::String, n_qubits::Int, beta::Float64, rng)
         spectrum = 0.1 .+ 0.9 .* rand(rng, 2^n_qubits)
         return rand_state_with_spectrum(spectrum; rng=rng)
     elseif kind == "codespace"
-        return codespace_dm(n_qubits, 0.6, 0.4)
+        return codespace_dm(n_qubits, sqrt(0.6), sqrt(0.4))
     else
         throw(ArgumentError("Unsupported starting state: $kind"))
     end
@@ -367,14 +367,10 @@ function make_initial_state_and_reference(cfg::RecoveryConfig)
         return ρ0, ρ0
     elseif cfg.recovery_type == "codespace" || cfg.recovery_type == "codespace_xy"
         sigma = cfg.sigma
-        p = rand()
-        max_x = p * (1 - p)  # Maximum allowed magnitude for |x|^2
-        radius = sqrt(rand() * max_x)
-        x = radius * exp(2π * im * rand())
         ρ = if cfg.recovery_type == "codespace"
             codespace_dm(cfg.n_qubits, cfg.rng)
         else
-            single_excitation_dm(cfg.n_qubits, p, x)
+            single_excitation_dm(cfg.n_qubits, cfg.rng)
         end
         r = cfg.sigma_mixture
         ρ0 = (1 - r) * ρ + r * sigma
