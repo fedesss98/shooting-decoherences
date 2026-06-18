@@ -38,6 +38,8 @@
 #
 # correlated_noise: Wether to use correlated Kraus operators to apply noise at once on the whole multi-qubit system
 #
+# pin: Whether collapse_map should use pinned collapse operators (default: false)
+#
 
 [iterate]
 base_name       = "20261706_rand_rand_"
@@ -62,6 +64,7 @@ noise_options = [
 real_noise = "general"
 
 correlated_noise = false 
+# pin = false
 
 [plots]
 ylims       = [0.35, 1.1]

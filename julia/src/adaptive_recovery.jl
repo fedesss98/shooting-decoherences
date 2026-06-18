@@ -192,9 +192,9 @@ function iterate_recovery!(step::Int, state::RecoveryState, config::RecoveryConf
   rho1 = ptrace_ancilla(collapse_state(rho1_, Πs[povm]), ds, da)
   rho2 = ptrace_ancilla(collapse_state(rho2_, Πs[povm]), ds, da)
   # Get the CPTP map corresponding to the collapse
-  Cx = collapse_map(ptrace_ancilla(rho_to_rec_, ds, da), rho_to_rec)
-  C1 = collapse_map(ptrace_ancilla(rho1_, ds, da), rho1)
-  C2 = collapse_map(ptrace_ancilla(rho2_, ds, da), rho2)
+  Cx = collapse_map(ptrace_ancilla(rho_to_rec_, ds, da), rho_to_rec; pin=config.pin)
+  C1 = collapse_map(ptrace_ancilla(rho1_, ds, da), rho1; pin=config.pin)
+  C2 = collapse_map(ptrace_ancilla(rho2_, ds, da), rho2; pin=config.pin)
 
   Nx = Cx * Xi * Nx
   N1 = C1 * Xi1 * N1

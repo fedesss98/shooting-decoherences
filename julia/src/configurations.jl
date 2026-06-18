@@ -74,6 +74,7 @@ struct RecoveryConfig
     noise_options::Vector{NoiseObj}
     real_noise_idx::Int
     codespace_projection::String
+    pin::Bool
 end
 
 function RecoveryConfig(
@@ -96,7 +97,8 @@ function RecoveryConfig(
     plots_options::Dict{Symbol,Any}=Dict{Symbol,Any}(),
     noise_options::Union{Nothing,Vector{NoiseObj}}=nothing,
     real_noise_idx::Int=0,
-    codespace_projection::String="auto"
+    codespace_projection::String="auto",
+    pin::Bool=false
 )
     ancilla_state = make_ancilla_state(ancilla_state_name, ancilla_alpha)
     collision_unitary = make_collision_unitary(
@@ -110,7 +112,7 @@ function RecoveryConfig(
         n_qubits, n_timesteps, n_states, seed, rng, dt, ancilla_alpha,
         ancilla_state_name, collision_unitary_name, ancilla_state, collision_unitary,
         correlated_noise, plots_options, isnothing(noise_options) ? NoiseObj[real_noise] : noise_options,
-        real_noise_idx, codespace_projection
+        real_noise_idx, codespace_projection, pin
     )
 end
 
@@ -211,6 +213,7 @@ function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
     sigma_mixture = get(cfg, "sigma_mixture", 0.5)
     correlated_noise = get(cfg, "correlated_noise", false)
     codespace_projection = get(cfg, "codespace_projection", "auto")
+    pin = get(cfg, "pin", false)
     plots_options = Dict{Symbol,Any}(Symbol(k) => v for (k, v) in get(cfg, "plots", Dict{String,Any}()))
 
     rng = make_rng(seed)
