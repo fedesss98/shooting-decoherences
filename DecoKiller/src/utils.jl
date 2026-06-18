@@ -225,6 +225,15 @@ function _swap_unitary(ds::Int, da::Int)
     return U
 end
 
+function _partial_swap_unitary(ds::Int, da::Int; tau=1.0)
+    U = zeros(ComplexF64, ds * da, ds * da)
+    sp = [0.0 1.0; 0.0 0.0]
+    sm = [0.0 0.0; 1.0 0.0]
+    H = kron(sp, sm) + kron(sm, sp)
+    U = exp(- 1im * H * tau)
+    return U
+end
+
 function _n_qubit_exchange_unitary(n_qubits::Int, g::Float64=0.1, t::Float64=1.0)
     # Qubit raising and lowering operators
     sp = [0.0 1.0; 0.0 0.0]
