@@ -5,7 +5,14 @@ using JSON
 using JLD2
 using Dates
 
-export run_experiment, iterate_recovery!
+export 
+run_experiment, 
+iterate_recovery!,
+kraus_to_superop,
+get_kraus_operators,
+vec, unvec, ptrace_sys, ptrace_anc,
+fidelity, overlap, tr
+
 
 # Core primitives and lower-level modules.
 include("PetzMaps.jl")
