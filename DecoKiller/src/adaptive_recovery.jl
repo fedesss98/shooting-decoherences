@@ -225,7 +225,17 @@ function iterate_recovery!(
   # ======================================
   # Step 4: Update noise guess and recovery map
   update_noise_guess!(state, povm)
-  model = CollisionModel(state.choice.current == 1 ? N1 : N2, config.sigma)
+  if config.recover_all
+    model = CollisionModel(state.choice.current == 1 ?
+                           state.noise_options[1].supermap_noise ^ step :
+                           state.noise_options[2].supermap_noise ^ step,
+      config.sigma)
+  else
+    model = CollisionModel(state.choice.current == 1 ?
+                           N1 :
+                           N2,
+      config.sigma)
+  end
   P = kraus_to_superop(model.kraus_rec)
 
   # ======================================
@@ -239,8 +249,9 @@ function iterate_recovery!(
   else
     state.ρ_codespace0
   end
-  if step == config.n_timesteps
-    @debug "Rho initial before projection:\n$rho_initial"
+  if step == 1 || step == config.n_timesteps
+    @debug "Rho initial before projection:\n$rho_initial" rho_initial
+    @debug "Rho recovered before projection:\n$rho_rec" rho_rec
   end
   if config.n_qubits > 1
     rho_rec, prob_codespace = project_to_codespace(
@@ -259,10 +270,10 @@ function iterate_recovery!(
       projection=config.codespace_projection
     )
   end
-  if step == config.n_timesteps
+  if step == 1 || step == config.n_timesteps
     @debug "Rho initial after projection:\n$rho_initial"
     @debug "Recovered rho:\n$rho_rec" rho_rec
-    @debug "Free rho" rho_free
+    # @debug "Free rho" rho_free
   end
   # rho_initial = state.ρ0
   fid_initial = fidelity(rho_initial, rho_rec)
@@ -292,9 +303,9 @@ function iterate_recovery!(
     state.noise_options[1].supermap = P * N1
     state.noise_options[2].supermap = P * N2
   else
-    config.real_noise.supermap *= Nx
-    state.noise_options[1].supermap *= N1
-    state.noise_options[2].supermap *= N2
+    config.real_noise.supermap = Nx
+    state.noise_options[1].supermap = N1
+    state.noise_options[2].supermap = N2
   end
 
   return nothing
