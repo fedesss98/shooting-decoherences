@@ -41,6 +41,8 @@ function _run_single_state!(cfg::RecoveryConfig, state::RecoveryState, logs::Rec
     initial_state = deepcopy(state)
     reset_initial_state!(initial_state, cfg)
 
+    @debug "Initial state ρ0: $(initial_state.ρ0)"
+
     p_time = Progress(cfg.n_timesteps, desc=" State $s ", offset=1)
     for step in 1:cfg.n_timesteps
         iterate_recovery!(step, initial_state, cfg, logs)
@@ -53,7 +55,7 @@ function _run_single_state!(cfg::RecoveryConfig, state::RecoveryState, logs::Rec
 
     start_idx = (s - 1) * cfg.n_timesteps + 1
     end_idx = s * cfg.n_timesteps
-    return start_idx, end_idx
+    return start_idx, end_idx, initial_state
 end
 
 
@@ -79,12 +81,13 @@ function run_experiment(config_file="./configs/config.toml"; debug::Bool=false)
     fidelities = zeros(Float64, cfg.n_timesteps)
 
     if cfg.n_states == 1
-        start_idx, end_idx = _run_single_state!(cfg, state, logs, 1)
+        start_idx, end_idx, initial_state = _run_single_state!(cfg, state, logs, 1)
+        state = deepcopy(initial_state)
         avg_fidelities = [nothing, nothing]
     else
         p_states = Progress(cfg.n_states, desc="Adaptive Recovery ")
         for s in 1:cfg.n_states
-            start_idx, end_idx = _run_single_state!(cfg, state, logs, s)
+            start_idx, end_idx, _ = _run_single_state!(cfg, state, logs, s)
             ref_fidelities .+= logs.ref_fidelities[start_idx:end_idx]
             fidelities .+= logs.fidelities[start_idx:end_idx]
             next!(p_states)
