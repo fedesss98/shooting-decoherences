@@ -84,3 +84,39 @@ end
     @test_throws ArgumentError single_excitation_state(3, 1, 0)
     @test_throws ArgumentError codespace_dm(2, 1, 1; coherence=1.1)
 end
+
+@testset "plus ZZ reference state" begin
+    t = π / 4
+    ψ = plus_zz_state(2; t=t)
+    expected = ComplexF64[
+        exp(-im * t),
+        exp(im * t),
+        exp(im * t),
+        exp(-im * t),
+    ] / 2
+
+    @test ψ ≈ expected
+    @test norm(ψ) ≈ 1
+
+    ρ = plus_zz_dm(2; t=t)
+    @test ρ ≈ expected * expected'
+    @test tr(ρ) ≈ 1
+    @test ρ * ρ ≈ ρ
+
+    ρ3 = plus_zz_dm(3)
+    @test size(ρ3) == (8, 8)
+    @test tr(ρ3) ≈ 1
+    @test ρ3 * ρ3 ≈ ρ3
+    @test minimum(eigvals(Hermitian(ρ3))) >= -1e-12
+    @test_throws ArgumentError plus_zz_state(0)
+end
+
+include("../src/DecoKiller.jl")
+
+@testset "pinned collapse maps" begin
+    ρ = Matrix{ComplexF64}(I, 4, 4) / 4
+    zero_target = zeros(ComplexF64, 4, 4)
+
+    @test Main.DecoKiller.collapse_map(ρ, zero_target; pin=true) == zeros(ComplexF64, 16, 16)
+    @test_throws ArgumentError PetzMaps.kraus_to_superop(Matrix{ComplexF64}[])
+end

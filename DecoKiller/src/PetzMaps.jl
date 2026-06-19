@@ -16,6 +16,8 @@ export
     # initial states
     codespace_state, codespace_dm, input_state, thermal_state, random_state,
     thermal_state_hopping,
+    plus_zz_state, plus_zz_dm,
+    singlet_state, werner_dm,
     single_excitation_state, single_excitation_dm,
     apply_channel, apply_extended_channel, recovery_map, rand_state_with_spectrum, expand_kraus_operators,
     # metrics

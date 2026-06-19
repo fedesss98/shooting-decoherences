@@ -243,6 +243,7 @@ function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
     recovery_type   = get(cfg, "recovery_type", "auto")
     starting_state  = get(cfg, "starting_state", "thermal")
     sigma_mixture   = get(cfg, "sigma_mixture", 0.5)
+    sigma_p         = Float64(get(cfg, "sigma_p", 0.5))
     tau             = get(cfg, "coll_time", 1.0)
     pin             = get(cfg, "pin", false)
     correlated_noise = get(cfg, "correlated_noise", false)
@@ -253,7 +254,7 @@ function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
     experiment_dir = setup_experiment_dir(name, cfg)
     setup_logger(joinpath(experiment_dir, "debug.log"); console_level=debug ? Logging.Debug : Logging.Info)
 
-    sigma = make_reference_state(starting_state, n_qubits, beta, rng)
+    sigma = make_reference_state(starting_state, n_qubits, beta, rng; sigma_p=sigma_p)
     noise_options = parse_noise_options(cfg, sigma, dt, rng)
     if get(cfg, "real_noise", nothing) === nothing
         println("No real noise specified in config, sampling from noise options...\n")
@@ -300,7 +301,7 @@ function setup_experiment_dir(name::String, cfg::Dict)::String
     return experiment_dir
 end
 
-function make_reference_state(kind::String, n_qubits::Int, beta::Float64, rng)
+function make_reference_state(kind::String, n_qubits::Int, beta::Float64, rng; sigma_p::Float64=0.5)
     if kind == "thermal"
         return thermal_state(n_qubits, beta)
     elseif kind == "thermal_xy"
@@ -310,12 +311,16 @@ function make_reference_state(kind::String, n_qubits::Int, beta::Float64, rng)
         return rand_state_with_spectrum(spectrum; rng=rng)
     elseif kind == "codespace"
         return codespace_dm(n_qubits, sqrt(0.6), sqrt(0.4))
+    elseif kind == "plus_zz"
+        return plus_zz_dm(n_qubits)
+    elseif kind == "werner"
+        return werner_dm(n_qubits, sigma_p)
     else
         throw(ArgumentError("Unsupported starting state: $kind"))
     end
 end
 
-function make_reference_state(params::Dict, n_qubits::Int, beta::Float64, rng)
+function make_reference_state(params::Dict, n_qubits::Int, beta::Float64, rng; sigma_p::Float64=0.5)
     n_qubits > 1 && throw(ArgumentError("Input state with angles is only supported for single qubit systems"))
     if haskey(params, "rx") && haskey(params, "ry") && haskey(params, "rz")
         rx = params["rx"]

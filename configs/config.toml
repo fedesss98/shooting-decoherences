@@ -8,8 +8,12 @@
 #
 # reference_state: Type of reference state (default: "thermal"):
 #   - "thermal": Use a thermal state at inverse temperature beta
+#   - "thermal_xy": Use a thermal state from the all-to-all hopping Hamiltonian
 #   - "random": Generate a random Density Matrix with a random spectrum
 #   - "codespace": Use a state in the codespace a|00...0> + b|11...1>
+#   - "plus_zz": Evolve |+>^n with exp(-i pi/4 sum_{i<j} Z_i Z_j)
+#   - "werner": Use p|psi-><psi-| + (1 - p)I/4 for n_qubits = 2
+# sigma_p: Mixing parameter p for "werner", with 1/3 < p <= 1 (default: 0.5)
 # beta: Inverse temperature for the reference state (default: 2.0)
 #
 # recovery_type: Type of recovery experiment (default: "auto"):
@@ -50,30 +54,30 @@
 
 name            = "test_projection2"
 n_qubits        = 2
-beta            = 2.0
 dt              = 0.031415926
-n_timesteps     = 30
-n_states        = 10
-starting_state  = "thermal"
+n_timesteps     = 15
+n_states        = 1
+starting_state  = "werner"
+sigma_p         = 0.5
+beta            = 10.0
 recovery_type   = "codespace_mxd"
-recover_all     = true
-code_projection = "none"
-pin             = false
-sigma_mixture   = 0.5
+code_projection = "00_11"
+sigma_mixture   = 0.0
 collision_unitary = "jc"
 ancilla_state   = "ground_qubit"
 ancilla_dim     = 2
 ancilla_alpha   = 0.5
 coll_time       = 0.1
-# seed            = 7697
-seed            = 1241
+seed            = 34643
 noise_options = [
-    [0.5, "amplitude_damping", 1.0],
-    [0.5, "phase_damping", 10.0],
+    [0.5, "phase_damping", 50.0],
+    [0.5, "amplitude_damping", 50.0],
 ]
-real_noise = "amplitude_damping"
+real_noise = "phase_damping"
 correlated_noise = false
 
+pin             = false
+recover_all     = true
 
 [plots]
 ylims       = [0.2, 1.01]

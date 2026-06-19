@@ -89,6 +89,70 @@ function site_operator(op, site, n)
     return foldl(kron, ops)
 end
 
+"""
+    plus_zz_state(n_qubits; t=π / 4)
+
+Create the pure state obtained by evolving `|+>^n` with the all-to-all
+Ising unitary `exp(-im * t * sum_{i<j} Z_i Z_j)`.
+For `n_qubits == 2`, this is exactly `exp(-im * Z ⊗ Z * t)|++>`.
+"""
+function plus_zz_state(n_qubits::Int; t::Real=π / 4)
+    n_qubits >= 1 || throw(ArgumentError("n_qubits must be at least 1"))
+
+    plus = ComplexF64[1, 1] / sqrt(2)
+    ψ = foldl(kron, [plus for _ in 1:n_qubits])
+
+    if n_qubits == 1
+        return ψ
+    end
+
+    σz = ComplexF64[1 0; 0 -1]
+    dim = 2^n_qubits
+    H = zeros(ComplexF64, dim, dim)
+    σz_ops = [site_operator(σz, i, n_qubits) for i in 1:n_qubits]
+
+    for i in 1:n_qubits-1
+        for j in i+1:n_qubits
+            H += σz_ops[i] * σz_ops[j]
+        end
+    end
+
+    return exp(-im * Float64(t) * H) * ψ
+end
+
+"""
+    plus_zz_dm(n_qubits; t=π / 4)
+
+Create the density matrix associated with [`plus_zz_state`](@ref).
+"""
+function plus_zz_dm(n_qubits::Int; t::Real=π / 4)
+    ψ = plus_zz_state(n_qubits; t=t)
+    return ψ * ψ'
+end
+
+"""
+    singlet_state()
+
+Create the two-qubit singlet state `|ψ-> = (|01> - |10>) / sqrt(2)`.
+"""
+function singlet_state()
+    return ComplexF64[0, 1, -1, 0] / sqrt(2)
+end
+
+"""
+    werner_dm(n_qubits, p)
+
+Create the two-qubit Werner state
+`p |ψ-><ψ-| + (1 - p) I / 4`, with `1/3 < p <= 1`.
+"""
+function werner_dm(n_qubits::Int, p::Real)
+    n_qubits == 2 || throw(ArgumentError("werner reference state requires n_qubits = 2"))
+    1 / 3 < p <= 1 || throw(ArgumentError("werner reference state requires 1/3 < p <= 1"))
+
+    ψ = singlet_state()
+    return Float64(p) * (ψ * ψ') + (1 - Float64(p)) * Matrix{ComplexF64}(I, 4, 4) / 4
+end
+
 function thermal_state_hopping(n, beta; g=1 / n)
     σp = ComplexF64[0 1; 0 0]
     σm = ComplexF64[0 0; 1 0]
