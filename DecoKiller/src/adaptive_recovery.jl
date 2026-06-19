@@ -48,11 +48,14 @@ function collapse_state(ρ_SA, Π)
   return ρ_post / Z
 end
 
-function collapse_map(input_state, output_state; pin=true)
+function collapse_map(input_state, output_state; pin=true, tol=1e-12)
   d = size(input_state, 1)
   superop = zeros(ComplexF64, d^2, d^2)
 
   if pin
+    if real(tr(output_state)) <= tol
+      return superop
+    end
     kraus = get_pin_operators(output_state)
     superop = kraus_to_superop(kraus)
     return superop
@@ -103,7 +106,7 @@ function update_noise_guess!(state::RecoveryState, povm::Int)
   elseif state.choice.c2_count > state.choice.c1_count
     state.choice.current = 2
   else
-    state.choice.current = state.choice.history[end]
+    state.choice.current = povm
   end
   push!(state.choice.history, state.choice.current)
   return nothing
@@ -236,6 +239,9 @@ function iterate_recovery!(
   else
     state.ρ_codespace0
   end
+  if step == config.n_timesteps
+    @debug "Rho initial before projection:\n$rho_initial"
+  end
   if config.n_qubits > 1
     rho_rec, prob_codespace = project_to_codespace(
       rho_rec, config.n_qubits;
@@ -253,9 +259,11 @@ function iterate_recovery!(
       projection=config.codespace_projection
     )
   end
-  @debug "Initial rho" rho_initial
-  @debug "Recovered rho" rho_rec
-  @debug "Free rho" rho_free
+  if step == config.n_timesteps
+    @debug "Rho initial after projection:\n$rho_initial"
+    @debug "Recovered rho:\n$rho_rec" rho_rec
+    @debug "Free rho" rho_free
+  end
   # rho_initial = state.ρ0
   fid_initial = fidelity(rho_initial, rho_rec)
   fid_track = fidelity(rho_initial, rho_free)
