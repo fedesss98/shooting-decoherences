@@ -29,11 +29,16 @@ end
 
 
 function get_pin_operators(rho_target; tol=1e-12)
+    size(rho_target, 1) == size(rho_target, 2) ||
+        throw(ArgumentError("rho_target must be square"))
     d = size(rho_target, 1)
 
     # diagonalize target density matrix
-    F = eigen(Hermitian(rho_target))
-    q = real.(F.values)
+    F = eigen(Hermitian((rho_target + rho_target') / 2))
+    q = max.(real.(F.values), 0.0)
+    q_sum = sum(q)
+    q_sum > tol || throw(ArgumentError("rho_target has zero positive trace"))
+    q ./= q_sum
     Phi = F.vectors
 
     Ks = Matrix{ComplexF64}[]

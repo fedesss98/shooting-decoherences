@@ -203,6 +203,7 @@ function enforce_physical!(rho::Matrix{ComplexF64})
 end
 
 function kraus_to_superop(kraus_ops)
+    isempty(kraus_ops) && throw(ArgumentError("kraus_to_superop requires at least one Kraus operator"))
     d = size(kraus_ops[1], 1)
     superop = zeros(ComplexF64, d^2, d^2)
     for K in kraus_ops
