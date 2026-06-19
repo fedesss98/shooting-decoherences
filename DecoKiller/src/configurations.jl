@@ -101,7 +101,7 @@ function RecoveryConfig(
     noise_options::Union{Nothing,Vector{NoiseObj}}=nothing,
     real_noise_idx::Int=0,
     codespace_projection::String="auto",
-    tau::Float64=1.0,
+    collision_time::Float64=1.0,
     recover_all::Bool=true,
     pin::Bool=false
 )
@@ -110,7 +110,7 @@ function RecoveryConfig(
         collision_unitary_name,
         2^n_qubits,
         size(ancilla_state, 1),
-        tau=tau
+        collision_time=collision_time
     )
 
     return RecoveryConfig(
@@ -200,20 +200,20 @@ function make_ancilla_state(kind::String, alpha::Float64, dim::Int=default_ancil
 end
 
 
-function make_collision_unitary(kind::String, ds::Int, da::Int; tau::Float64=1.0)::Matrix{ComplexF64}
+function make_collision_unitary(kind::String, ds::Int, da::Int; collision_time::Float64=1.0)::Matrix{ComplexF64}
     if kind == "swap"
         ds == da || throw(ArgumentError("collision_unitary = \"swap\" requires ancilla_dim = system dimension ($ds); got $da"))
         return _swap_unitary(ds, da)
     elseif kind == "partial_swap"
         ds == 2 && da == 2 || throw(ArgumentError("collision_unitary = \"partial_swap\" currently requires a single-qubit system and qubit ancilla"))
-        return _partial_swap_unitary(ds, da; tau=tau)
+        return _partial_swap_unitary(ds, da; collision_time=collision_time)
     elseif kind == "identity"
         return Matrix{ComplexF64}(I, ds * da, ds * da)
     elseif kind == "jc" || kind == "exchange"
         da == 2 || throw(ArgumentError("collision_unitary = \"jc\" requires ancilla_dim = 2"))
         n_qubits = Int(log2(ds))
         2^n_qubits == ds || throw(ArgumentError("collision_unitary = \"jc\" requires a qubit system dimension; got $ds"))
-        return _n_qubit_exchange_unitary(n_qubits, 0.1, tau)
+        return _n_qubit_exchange_unitary(n_qubits, 0.1, collision_time)
     else
         throw(ArgumentError("Unsupported collision_unitary: $kind"))
     end
@@ -244,7 +244,7 @@ function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
     starting_state  = get(cfg, "starting_state", "thermal")
     sigma_mixture   = get(cfg, "sigma_mixture", 0.5)
     sigma_p         = Float64(get(cfg, "sigma_p", 0.5))
-    tau             = get(cfg, "coll_time", 1.0)
+    collision_time  = get(cfg, "coll_time", 1.0)
     pin             = get(cfg, "pin", false)
     correlated_noise = get(cfg, "correlated_noise", false)
     codespace_projection = get(cfg, "code_projection", "auto")
@@ -280,7 +280,7 @@ function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
         real_noise_idx=real_noise_idx,
         codespace_projection=codespace_projection,
         recover_all=recover_all,
-        pin=pin, tau=tau
+        pin=pin, collision_time=collision_time
     )
 end
 
