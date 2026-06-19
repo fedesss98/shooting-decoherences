@@ -287,9 +287,15 @@ function iterate_recovery!(
   # Update the noise options for the next iteration, 
   #  with the past Petz recovery applied 
   #  and the next noise to be applied
-  config.real_noise.supermap = P * Nx
-  state.noise_options[1].supermap = P * N1
-  state.noise_options[2].supermap = P * N2
+  if config.recover_all
+    config.real_noise.supermap = P * Nx
+    state.noise_options[1].supermap = P * N1
+    state.noise_options[2].supermap = P * N2
+  else
+    config.real_noise.supermap *= Nx
+    state.noise_options[1].supermap *= N1
+    state.noise_options[2].supermap *= N2
+  end
 
   return nothing
 end
