@@ -217,7 +217,7 @@ function _damped_codespace_dm(psi::Vector{ComplexF64}, i::Int, j::Int, coherence
     rho[i, j] *= scale
     rho[j, i] *= scale
     return rho
-end
+end 
 
 """
     codespace_state(n_qubits, alpha0, alpha1)

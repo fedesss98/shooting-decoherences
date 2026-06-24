@@ -227,13 +227,13 @@ function iterate_recovery!(
   update_noise_guess!(state, povm)
   if config.recover_all
     model = CollisionModel(state.choice.current == 1 ?
-                           state.noise_options[1].supermap_noise ^ step :
-                           state.noise_options[2].supermap_noise ^ step,
+                           N1 :
+                           N2,
       config.sigma)
   else
     model = CollisionModel(state.choice.current == 1 ?
-                           N1 :
-                           N2,
+                           state.noise_options[1].supermap_noise ^ step :
+                           state.noise_options[2].supermap_noise ^ step,
       config.sigma)
   end
   P = kraus_to_superop(model.kraus_rec)
