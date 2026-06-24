@@ -152,12 +152,11 @@ function iterate_recovery!(
   state::RecoveryState,
   config::RecoveryConfig,
   logs::RecoveryLogs;
-  start_with_noise::Bool=true
 )
   length(state.noise_options) == 2 || error("This workflow currently supports exactly 2 noise options")
 
   Ox = config.real_noise.supermap_noise
-  if step == 1 && !start_with_noise
+  if step == 1 && !config.start_with_noise
     Nx = I(size(config.real_noise.supermap)[1])
     N1 = I(size(config.real_noise.supermap)[1])
     N2 = I(size(config.real_noise.supermap)[1])
