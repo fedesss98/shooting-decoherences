@@ -52,38 +52,44 @@
 #
 
 [iterate]
-base_name       = "test_mxd_btfp_amp_"
+base_name       = "old_results_"
 beta            = [0.1, 1.0, 2.0, 5.0, 10.0]
-sigma_mixture   = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+n_qubits        = [3, 4, 5, 6]
 
 [settings]
-n_qubits        = 2
-dt              = 0.031415926
-n_timesteps     = 5
-n_states        = 10
+n_timesteps     = 1
+n_states        = 100
+dt              = 0.1
 starting_state  = "thermal"
+# sigma_p         = 0.5
+sigma_mixture   = 0.0
+
 recovery_type   = "codespace_mxd"
+code_projection = "none"
+
 collision_unitary = "jc"
 ancilla_state   = "ground_qubit"
 ancilla_dim     = 2
 ancilla_alpha   = 0.5
 coll_time       = 0.1
-code_projection = "none"
-sigma_p         = 0.5
+
 # seed            = 7697
 seed            = 1214
 noise_options = [
-    [0.5, "bitflip", 20.0],
-    [0.5, "amplitude_damping", 20.0],
+    [0.5, "bitflip", 1.0],
+    [0.5, "bitflip", 1.0],
 ]
 correlated_noise = false 
 real_noise = "bitflip"
 
+start_with_noise = false
 pin             = true
 recover_all     = true
+
+nondestructive_measurement = true
 
 [plots]
 ylims       = [0.35, 1.1]
 xlims       = [0.0, 30.0]
-choices     = true
+choices     = false
 plot_title = "codespace_recovery_avg"
