@@ -54,14 +54,14 @@
 
 name            = "10_goback_to_ref"
 n_qubits        = 2
-dt              = 0.31415926
+dt              = 0.1
 n_timesteps     = 1
-n_states        = 100
+n_states        = 50
 starting_state  = "thermal"
 sigma_p         = 0.4
-# beta            = 2.0
+beta            = 2.0
 recovery_type   = "codespace"
-code_projection = "00_11"
+code_projection = "none"
 sigma_mixture   = 0.0
 collision_unitary = "jc"
 ancilla_state   = "ground_qubit"
@@ -70,12 +70,13 @@ ancilla_alpha   = 0.5
 coll_time       = 0.0
 seed            = 6232
 noise_options = [
-    [0.5, "bitflip", 50.0],
-    [0.5, "bitflip", 50.0],
+    [0.5, "bitflip", 1.0],
+    [0.5, "bitflip", 1.0],
 ]
-real_noise = "amplitude_damping"
+real_noise = "bitflip"
 correlated_noise = false
 
+start_with_noise = false
 pin             = true
 recover_all     = true
 
