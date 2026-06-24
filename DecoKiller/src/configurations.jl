@@ -233,7 +233,7 @@ end
 
 function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
     name            = get(cfg, "name", "test")
-    n_qubits        = get(cfg, "n_qubits", 1)
+    n_qubits        = Int(get(cfg, "n_qubits", 1))
     beta            = get(cfg, "beta", 2.0)
     dt              = get(cfg, "dt", 0.1)
     anc_alpha       = get(cfg, "ancilla_alpha", 0.8)
@@ -241,8 +241,8 @@ function parse_recovery_config(cfg::Dict; debug::Bool=false)::RecoveryConfig
     ancilla_dim     = get(cfg, "ancilla_dim", default_ancilla_dim(anc_type))
     collision_type  = get_config_alias(cfg, "collision_unitary", "coll_unitary"; default="swap")
     recover_all     = get(cfg, "recover_all", false)
-    n_timesteps     = get(cfg, "n_timesteps", 10)
-    n_states        = get(cfg, "n_states", 1)
+    n_timesteps     = Int(get(cfg, "n_timesteps", 10))
+    n_states        = Int(get(cfg, "n_states", 1))
     seed            = get(cfg, "seed", 42)
     recovery_type   = get(cfg, "recovery_type", "auto")
     starting_state  = get(cfg, "starting_state", "thermal")
