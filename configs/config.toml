@@ -63,11 +63,13 @@ beta            = 2.0
 recovery_type   = "codespace"
 code_projection = "none"
 sigma_mixture   = 0.0
+
 collision_unitary = "jc"
 ancilla_state   = "ground_qubit"
 ancilla_dim     = 2
 ancilla_alpha   = 0.5
 coll_time       = 0.0
+
 seed            = 6232
 noise_options = [
     [0.5, "bitflip", 1.0],
@@ -79,6 +81,8 @@ correlated_noise = false
 start_with_noise = false
 pin             = true
 recover_all     = true
+
+nondestructive_measurement = true
 
 [plots]
 ylims       = [0.2, 1.01]

@@ -207,21 +207,30 @@ function iterate_recovery!(
   povm = sample(config.rng, [1, 2], Weights(w))
 
   # Collapse the system and trace out the ancilla
-  rho_to_rec = ptrace_ancilla(collapse_state(rho_to_rec_, Πs[povm]), ds, da)
-  rho1 = ptrace_ancilla(collapse_state(rho1_, Πs[povm]), ds, da)
-  rho2 = ptrace_ancilla(collapse_state(rho2_, Πs[povm]), ds, da)
-  # Get the CPTP map corresponding to the collapse
-  Cx = collapse_map(ptrace_ancilla(rho_to_rec_, ds, da), rho_to_rec; pin=config.pin)
-  C1 = collapse_map(ptrace_ancilla(rho1_, ds, da), rho1; pin=config.pin)
-  C2 = collapse_map(ptrace_ancilla(rho2_, ds, da), rho2; pin=config.pin)
+  if config.nondestructive_measurement
+    rho_to_rec = ptrace_ancilla(rho_to_rec_, ds, da)
+    rho1 = ptrace_ancilla(rho1_, ds, da)
+    rho2 = ptrace_ancilla(rho2_, ds, da)
+  else
+    rho_to_rec = ptrace_ancilla(collapse_state(rho_to_rec_, Πs[povm]), ds, da)
+    rho1 = ptrace_ancilla(collapse_state(rho1_, Πs[povm]), ds, da)
+    rho2 = ptrace_ancilla(collapse_state(rho2_, Πs[povm]), ds, da)
+    # Get the CPTP map corresponding to the collapse
+    Cx = collapse_map(ptrace_ancilla(rho_to_rec_, ds, da), rho_to_rec; pin=config.pin)
+    C1 = collapse_map(ptrace_ancilla(rho1_, ds, da), rho1; pin=config.pin)
+    C2 = collapse_map(ptrace_ancilla(rho2_, ds, da), rho2; pin=config.pin)
+  end
 
   if config.recover_all
-    # Nx = Cx * Xi * Nx
-    # N1 = C1 * Xi1 * N1
-    # N2 = C2 * Xi2 * N2
-    Nx = Xi * Nx
-    N1 = Xi1 * N1
-    N2 = Xi2 * N2
+    if config.nondestructive_measurement
+      Nx = Xi * Nx
+      N1 = Xi1 * N1
+      N2 = Xi2 * N2
+    else
+      Nx = Cx * Xi * Nx
+      N1 = C1 * Xi1 * N1
+      N2 = C2 * Xi2 * N2
+    end
   end
 
   # ======================================
