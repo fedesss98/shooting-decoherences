@@ -1,7 +1,7 @@
 using LinearAlgebra
 using StatsBase
 
-function discrimin(ρ_test, ρ1, ρ2, ds, da, q1::Real=0.5, q2::Real=0.5, tol=1e-10)
+function discrimin(ρ_test, ρ1, ρ2, ds, da, q1::Real=0.5, q2::Real=0.5, tol=1e-12)
   size(ρ_test) == (ds * da, ds * da) || error("ρ_test has incompatible dimensions")
   size(ρ1) == (ds * da, ds * da) || error("ρ1 has incompatible dimensions")
   size(ρ2) == (ds * da, ds * da) || error("ρ2 has incompatible dimensions")
@@ -12,25 +12,37 @@ function discrimin(ρ_test, ρ1, ρ2, ds, da, q1::Real=0.5, q2::Real=0.5, tol=1e
   η2 = ptrace_sys(ρ2, ds, da)
 
   Δη = q1 * η1 - q2 * η2
-  eigen_decomp = eigen(Hermitian(Δη))
+  Δη = Hermitian((Δη + Δη') / 2)
+  
+  eigen_decomp = eigen(Δη)
   eigenvalues = eigen_decomp.values
   eigenvectors = eigen_decomp.vectors
-  
-  @debug "Discrimination: Δη = $(norm(Δη))"
-  # Early exit: states are indistinguishable, return uniform
-  if sum(abs, eigenvalues) < tol
-    return [0.5, 0.5], [0.5*I(da), 0.5*I(da)]
-  end
+  @debug "Trace distance for discrimination" sum(abs, eigenvalues)
 
+  λscale = max(maximum(abs.(eigenvalues)), 1.0)
+  eig_tol = tol * λscale
 
   Π1 = zeros(ComplexF64, da, da)
+  Π2 = zeros(ComplexF64, da, da)
+
   for i in eachindex(eigenvalues)
-    if eigenvalues[i] > tol
+      λ = eigenvalues[i]
       v = eigenvectors[:, i]
-      Π1 += v * v'
-    end
+      P = v * v'
+
+      if λ > eig_tol
+          Π1 += P
+      elseif λ < -eig_tol
+          Π2 += P
+      else
+          # Tie / indistinguishable subspace
+          Π1 += 0.5 * P
+          Π2 += 0.5 * P
+      end
   end
-  Π2 = I(da) - Π1
+
+  Π1 = (Π1 + Π1') / 2
+  Π2 = (Π2 + Π2') / 2
 
   p1 = real(tr(Π1 * η_test))
   p2 = real(tr(Π2 * η_test))
