@@ -12,15 +12,16 @@ function discrimin(ρ_test, ρ1, ρ2, ds, da, q1::Real=0.5, q2::Real=0.5, tol=1e
   η2 = ptrace_sys(ρ2, ds, da)
 
   Δη = q1 * η1 - q2 * η2
-
-  # Early exit: states are indistinguishable, return uniform
-  if norm(Δη) < tol
-    return [0.5, 0.5], [0.5*I(da), 0.5*I(da)]
-  end
-
   eigen_decomp = eigen(Hermitian(Δη))
   eigenvalues = eigen_decomp.values
   eigenvectors = eigen_decomp.vectors
+  
+  @debug "Discrimination: Δη = $(norm(Δη))"
+  # Early exit: states are indistinguishable, return uniform
+  if sum(abs, eigenvalues) < tol
+    return [0.5, 0.5], [0.5*I(da), 0.5*I(da)]
+  end
+
 
   Π1 = zeros(ComplexF64, da, da)
   for i in eachindex(eigenvalues)
@@ -36,6 +37,7 @@ function discrimin(ρ_test, ρ1, ρ2, ds, da, q1::Real=0.5, q2::Real=0.5, tol=1e
 
   # Numerical sanity: p1 + p2 should be 1
   total = p1 + p2
+  @debug "Discrimination: p1 = $(p1/total), p2 = $(p2/total)"
   return [p1/total, p2/total], [Π1, Π2]
 end
 
@@ -296,7 +298,7 @@ function iterate_recovery!(
   push!(logs.maps, (
     Nx=copy(Nx), N1=copy(N1), N2=copy(N2),
     P=copy(P),
-    Cx=copy(Cx),  # Placeholder for collapse map, not used in this version
+    Cx=copy(config.nondestructive_measurement ? I(size(P)[1]) : Cx),
     Xi=copy(Xi)
   ))
   push!(logs.ref_fidelities, fid_track)
