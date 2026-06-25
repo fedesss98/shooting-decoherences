@@ -54,6 +54,10 @@ function collapse_map(input_state, output_state; pin=true, tol=1e-12)
   d = size(input_state, 1)
   superop = zeros(ComplexF64, d^2, d^2)
 
+  if isapprox(input_state, output_state; atol=1e-12)
+    return I(d^2)
+  end
+
   if pin
     if real(tr(output_state)) <= tol
       return superop
@@ -209,30 +213,24 @@ function iterate_recovery!(
   povm = sample(config.rng, [1, 2], Weights(w))
 
   # Collapse the system and trace out the ancilla
-  if config.nondestructive_measurement
-    rho_to_rec = ptrace_ancilla(rho_to_rec_, ds, da)
-    rho1 = ptrace_ancilla(rho1_, ds, da)
-    rho2 = ptrace_ancilla(rho2_, ds, da)
-  else
-    rho_to_rec = ptrace_ancilla(collapse_state(rho_to_rec_, Πs[povm]), ds, da)
-    rho1 = ptrace_ancilla(collapse_state(rho1_, Πs[povm]), ds, da)
-    rho2 = ptrace_ancilla(collapse_state(rho2_, Πs[povm]), ds, da)
-    # Get the CPTP map corresponding to the collapse
-    Cx = collapse_map(ptrace_ancilla(rho_to_rec_, ds, da), rho_to_rec; pin=config.pin)
-    C1 = collapse_map(ptrace_ancilla(rho1_, ds, da), rho1; pin=config.pin)
-    C2 = collapse_map(ptrace_ancilla(rho2_, ds, da), rho2; pin=config.pin)
-  end
+  weakness = config.povm_weakness
+  Π = weakness * I(size(Πs[povm], 1)) / 2 + (1 - weakness) * Πs[povm]
+  @debug "Weakness $weakness" Π
+  rho_to_rec = ptrace_ancilla(collapse_state(rho_to_rec_, Π), ds, da)
+  rho1 = ptrace_ancilla(collapse_state(rho1_, Π), ds, da)
+  rho2 = ptrace_ancilla(collapse_state(rho2_, Π), ds, da)
+  @debug "Undisturbed system" ptrace_ancilla(rho_to_rec_, ds, da)
+  @debug "Collapsed system" rho_to_rec
+  # Get the CPTP map corresponding to the collapse
+  Cx = collapse_map(ptrace_ancilla(rho_to_rec_, ds, da), rho_to_rec; pin=config.pin)
+  C1 = collapse_map(ptrace_ancilla(rho1_, ds, da), rho1; pin=config.pin)
+  C2 = collapse_map(ptrace_ancilla(rho2_, ds, da), rho2; pin=config.pin)
+  
 
   if config.recover_all
-    if config.nondestructive_measurement
-      Nx = Xi * Nx
-      N1 = Xi1 * N1
-      N2 = Xi2 * N2
-    else
       Nx = Cx * Xi * Nx
       N1 = C1 * Xi1 * N1
       N2 = C2 * Xi2 * N2
-    end
   end
 
   # ======================================
@@ -298,7 +296,7 @@ function iterate_recovery!(
   push!(logs.maps, (
     Nx=copy(Nx), N1=copy(N1), N2=copy(N2),
     P=copy(P),
-    Cx=copy(config.nondestructive_measurement ? I(size(P)[1]) : Cx),
+    Cx=copy(Cx),
     Xi=copy(Xi)
   ))
   push!(logs.ref_fidelities, fid_track)
