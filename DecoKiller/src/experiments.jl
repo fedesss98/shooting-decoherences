@@ -39,7 +39,9 @@ end
 
 function _run_single_state!(cfg::RecoveryConfig, state::RecoveryState, logs::RecoveryLogs, s::Int)
     initial_state = deepcopy(state)
-    reset_initial_state!(initial_state, cfg)
+    if s>1
+        reset_initial_state!(initial_state, cfg)
+    end
 
     @debug "Initial state ρ0: $(initial_state.ρ0)"
 
