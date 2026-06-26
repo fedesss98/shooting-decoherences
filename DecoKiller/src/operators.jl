@@ -268,7 +268,7 @@ function apply_channel(kraus, ρ, n_subsystems::Int; susbsystem_dim::Int=2, extr
         ρi = ρf
     end
 
-    return ρi
+    return ρi / tr(ρi)
 end
 
 """
@@ -279,7 +279,8 @@ function apply_extended_channel(ρ, kraus; dim_to_extend=0)
         return apply_channel(kraus, ρ)
     end
     kraus_extended = [kron(k, I(dim_to_extend)) for k in kraus]
-    return sum([k*ρ*k' for k in kraus_extended])
+    ρ = sum([k*ρ*k' for k in kraus_extended])
+    return ρ / tr(ρ)
 end
 
 

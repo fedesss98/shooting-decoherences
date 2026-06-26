@@ -65,7 +65,7 @@ function ptrace_ancilla(ρ::AbstractMatrix, ds::Int, da::Int)
             ρ_sys[i, j] = tr(block)
         end
     end
-    return ρ_sys
+    return ρ_sys / tr(ρ_sys)
 end
 
 
@@ -91,5 +91,5 @@ function ptrace_sys(ρ::AbstractMatrix, ds::Int, da::Int)
             ρ_anc[k, l] = s
         end
     end
-    return ρ_anc
+    return ρ_anc / tr(ρ_anc)
 end

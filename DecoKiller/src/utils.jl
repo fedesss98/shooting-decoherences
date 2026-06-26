@@ -558,3 +558,9 @@ function clean_eigenvalues(eigvals, tol=1e-10)
     end
     return cleaned
 end
+
+
+function evolve(ρ, superop)
+    ρ_evolved = unvec(superop * vec(ρ))
+    return ρ_evolved / tr(ρ_evolved)
+end

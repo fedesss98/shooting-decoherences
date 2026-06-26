@@ -188,10 +188,10 @@ function iterate_recovery!(
 
   # ======================================
   # Step 1: Apply noise only on the reference state to track the fidelity without recovery
-  rho_free = unvec((Ox)^step * vec(state.ρ0))
-  rho_to_rec = unvec(Nx * vec(state.ρ0))
-  rho1 = unvec(N1 * vec(state.ρ0))
-  rho2 = unvec(N2 * vec(state.ρ0))
+  rho_free = evolve(state.ρ0, Ox^step)
+  rho_to_rec = evolve(state.ρ0, Nx)
+  rho1 = evolve(state.ρ0, N1)
+  rho2 = evolve(state.ρ0, N2)
 
   # ======================================
   # Step 2: Informative collision

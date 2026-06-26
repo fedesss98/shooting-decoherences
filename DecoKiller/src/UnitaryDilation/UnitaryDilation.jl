@@ -82,7 +82,7 @@ function apply_collision(
         return rho_sys_out, rho_anc_out
     end
 
-    return rho_after
+    return rho_after / tr(rho_after)
 end
 
 
