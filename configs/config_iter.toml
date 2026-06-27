@@ -52,32 +52,32 @@
 #
 
 [iterate]
-base_name       = "old_results_"
-beta            = [0.1, 1.0, 2.0, 5.0, 10.0]
-n_qubits        = [3, 4, 5, 6]
+base_name       = "steps_"
+beta            = [0.4, 0.8]
+n_qubits        = [3]
+n_timesteps     = [1, 2, 3, 10]
 
 [settings]
-n_timesteps     = 1
 n_states        = 100
 dt              = 0.1
 starting_state  = "thermal"
 # sigma_p         = 0.5
 sigma_mixture   = 0.0
 
-recovery_type   = "codespace_mxd"
+recovery_type   = "codespace"
 code_projection = "none"
 
 collision_unitary = "jc"
 ancilla_state   = "ground_qubit"
 ancilla_dim     = 2
 ancilla_alpha   = 0.5
-coll_time       = 0.1
+coll_time       = 0.0
 
 # seed            = 7697
 seed            = 1214
 noise_options = [
-    [0.5, "bitflip", 1.0],
-    [0.5, "bitflip", 1.0],
+    [0.5, "bitflip", 5.0],
+    [0.5, "bitflip", 5.0],
 ]
 correlated_noise = false 
 real_noise = "bitflip"
@@ -87,6 +87,7 @@ pin             = true
 recover_all     = true
 
 nondestructive_measurement = true
+povm_weakness   = 1.0
 
 [plots]
 ylims       = [0.35, 1.1]

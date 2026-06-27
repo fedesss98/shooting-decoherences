@@ -1,3 +1,5 @@
+include("./werner_states.jl")
+
 """
     rand_unitary_haar(N)
 
@@ -130,28 +132,6 @@ function plus_zz_dm(n_qubits::Int; t::Real=π / 4)
     return ψ * ψ'
 end
 
-"""
-    singlet_state()
-
-Create the two-qubit singlet state `|ψ-> = (|01> - |10>) / sqrt(2)`.
-"""
-function singlet_state()
-    return ComplexF64[0, 1, -1, 0] / sqrt(2)
-end
-
-"""
-    werner_dm(n_qubits, p)
-
-Create the two-qubit Werner state
-`p |ψ-><ψ-| + (1 - p) I / 4`, with `1/3 < p <= 1`.
-"""
-function werner_dm(n_qubits::Int, p::Real)
-    n_qubits == 2 || throw(ArgumentError("werner reference state requires n_qubits = 2"))
-    1 / 3 < p <= 1 || throw(ArgumentError("werner reference state requires 1/3 < p <= 1"))
-
-    ψ = singlet_state()
-    return Float64(p) * (ψ * ψ') + (1 - Float64(p)) * Matrix{ComplexF64}(I, 4, 4) / 4
-end
 
 function thermal_state_hopping(n, beta; g=1 / n)
     σp = ComplexF64[0 1; 0 0]

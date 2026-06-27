@@ -14,6 +14,18 @@
 #   - "plus_zz": Evolve |+>^n with exp(-i pi/4 sum_{i<j} Z_i Z_j)
 #   - "werner": Use p|psi-><psi-| + (1 - p)I/4 for n_qubits = 2
 # sigma_p: Mixing parameter p for "werner", with 1/3 < p <= 1 (default: 0.5)
+# For multipartite werner states:
+# n = 2
+# p_full_entangled = 1/3       # 0.333...
+# p_genuine        = 1/3       # same for two parties
+
+# n = 3
+# p_not_fully_sep  = 1/5       # 0.2
+# p_genuine        = 3/7       # ≈ 0.428571
+
+# n = 4
+# p_not_fully_sep  = 1/9       # ≈ 0.111111
+# p_genuine        = 7/15      # ≈ 0.466667
 # beta: Inverse temperature for the reference state (default: 2.0)
 #
 # recovery_type: Type of recovery experiment (default: "auto"):
@@ -52,40 +64,42 @@
 #
 
 
-name            = "10_goback_to_ref"
+name            = "werner2_dis_amp_btfp"
 n_qubits        = 2
-dt              = 0.1
-n_timesteps     = 1
-n_states        = 50
-starting_state  = "thermal"
-sigma_p         = 0.4
-beta            = 2.0
-recovery_type   = "codespace"
-code_projection = "none"
+dt              = 0.031415
+n_timesteps     = 30
+n_states        = 1
+starting_state  = "werner"
+sigma_p         = 0.1
+# beta            = 1.0
 sigma_mixture   = 0.0
+
+recovery_type   = "auto"
+code_projection = "none"
 
 collision_unitary = "jc"
 ancilla_state   = "ground_qubit"
 ancilla_dim     = 2
 ancilla_alpha   = 0.5
-coll_time       = 0.0
+coll_time       = 1.0
 
 seed            = 6232
 noise_options = [
-    [0.5, "bitflip", 1.0],
-    [0.5, "bitflip", 1.0],
+    [0.5, "amplitude_damping", 10.0],
+    [0.5, "bitflip", 10.0],
 ]
-real_noise = "bitflip"
+real_noise = "amplitude_damping"
 correlated_noise = false
 
 start_with_noise = false
 pin             = true
 recover_all     = true
 
-nondestructive_measurement = true
+nondestructive_measurement = false
+povm_weakness = 0.0
 
 [plots]
-ylims       = [0.2, 1.01]
+ylims       = [0.4, 1.01]
 # xlims       = [0.0, 10.0]
-choices     = true
+choices     = false
 plot_title = "codespace_recovery_avg"

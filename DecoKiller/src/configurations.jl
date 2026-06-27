@@ -324,7 +324,11 @@ function make_reference_state(kind::String, n_qubits::Int, beta::Float64, rng; s
     elseif kind == "plus_zz"
         return plus_zz_dm(n_qubits)
     elseif kind == "werner"
-        return werner_dm(n_qubits, sigma_p)
+        if n_qubits == 2
+            return noisy_entangled_dm(n_qubits, sigma_p; kind=:singlet_pairs)
+        else
+            return noisy_entangled_dm(n_qubits, sigma_p; kind=:ghz)
+        end
     else
         throw(ArgumentError("Unsupported starting state: $kind"))
     end
